@@ -163,7 +163,12 @@ jobs:
           -DCMAKE_INSTALL_PREFIX=$PWD/../../prebuilt/linux/x86_64 \
           -DBUILD_SHARED_LIBS=ON \
           -DFT_DISABLE_HARFBUZZ=ON \
-          -DFT_DISABLE_BROTLI=ON
+          -DFT_DISABLE_BROTLI=ON \
+          -DFT_DISABLE_PNG=ON \
+          -DFT_DISABLE_BZIP2=ON \
+          -DFT_REQUIRE_ZLIB=OFF \
+          -DFT_REQUIRE_BZIP2=OFF \
+          -DFT_REQUIRE_PNG=OFF
         ninja -j$(nproc)
         ninja install
     
@@ -337,7 +342,12 @@ jobs:
           -DCMAKE_INSTALL_PREFIX=%CD%\..\..\prebuilt\windows\x86_64 ^
           -DBUILD_SHARED_LIBS=ON ^
           -DFT_DISABLE_HARFBUZZ=ON ^
-          -DFT_DISABLE_BROTLI=ON
+          -DFT_DISABLE_BROTLI=ON ^
+          -DFT_DISABLE_PNG=ON ^
+          -DFT_DISABLE_BZIP2=ON ^
+          -DFT_REQUIRE_ZLIB=OFF ^
+          -DFT_REQUIRE_BZIP2=OFF ^
+          -DFT_REQUIRE_PNG=OFF
         cmake --build . --config Release --parallel
         cmake --install . --config Release
     
@@ -499,7 +509,12 @@ jobs:
           -DCMAKE_INSTALL_PREFIX=$PWD/../../prebuilt/macos/x86_64 \
           -DBUILD_SHARED_LIBS=ON \
           -DFT_DISABLE_HARFBUZZ=ON \
-          -DFT_DISABLE_BROTLI=ON
+          -DFT_DISABLE_BROTLI=ON \
+          -DFT_DISABLE_PNG=ON \
+          -DFT_DISABLE_BZIP2=ON \
+          -DFT_REQUIRE_ZLIB=OFF \
+          -DFT_REQUIRE_BZIP2=OFF \
+          -DFT_REQUIRE_PNG=OFF
         ninja -j$(sysctl -n hw.ncpu)
         ninja install
     

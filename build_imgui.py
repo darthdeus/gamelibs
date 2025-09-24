@@ -69,7 +69,8 @@ else:  # Linux
         # Try both paths since SDL2 CMake install might use either
         SDL_INCLUDE_DIRS = [f"{SDL2_PREFIX}/include/SDL2", f"{SDL2_PREFIX}/include"]
         SDL_LIB_DIR = f"{SDL2_PREFIX}/lib"
-        EXTRA_LDFLAGS = [f"-L{SDL_LIB_DIR}", "-lSDL2", "-lGL", "-ldl", "-lm"]
+        # Use $ORIGIN to find SDL2 in same directory as cimgui
+        EXTRA_LDFLAGS = [f"-L{SDL_LIB_DIR}", "-lSDL2", "-lGL", "-ldl", "-lm", "-Wl,-rpath,'$ORIGIN'"]
     else:
         EXTRA_LDFLAGS = ["-L../bindings", "-lSDL2-2.0", "-lGL", "-ldl", "-Wl,-rpath,$ORIGIN/../bindings"]
         SDL_INCLUDE_DIRS = ["bindings/SDL2-2.32.4/include"]
