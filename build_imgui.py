@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """
-One-command build script for ImGui + Rock integration
-Usage: ./build.py
+Universal build script for cimgui with SDL2 and OpenGL3 backends
+Usage: 
+  ./build_imgui.py                                    # Use default paths
+  ./build_imgui.py <SDL2_PREFIX> <INSTALL_PREFIX>     # Specify paths
 """
 
 import os
@@ -17,29 +19,57 @@ IS_WINDOWS = SYSTEM == "Windows"
 IS_MACOS = SYSTEM == "Darwin"
 IS_LINUX = SYSTEM == "Linux"
 
+# Parse command line arguments
+if len(sys.argv) == 3:
+    SDL2_PREFIX = Path(sys.argv[1]).resolve()
+    INSTALL_PREFIX = Path(sys.argv[2]).resolve()
+    CI_MODE = True
+else:
+    # Default paths for local development
+    SDL2_PREFIX = None
+    INSTALL_PREFIX = Path.cwd() / "libs"
+    CI_MODE = False
+
 # Platform-specific settings
 if IS_WINDOWS:
     LIB_EXT = ".dll"
+    LIB_PREFIX = ""
     CC = "cl"
     CXX = "cl"
     EXTRA_CFLAGS = []
-    EXTRA_LDFLAGS = ["-lSDL2", "-lopengl32"]
-    SDL_INCLUDE = "C:/SDL2/include"  # Adjust as needed
+    if CI_MODE and SDL2_PREFIX:
+        SDL_INCLUDE = f"{SDL2_PREFIX}/include"
+        SDL_LIB_DIR = f"{SDL2_PREFIX}/lib"
+        EXTRA_LDFLAGS = [f"/LIBPATH:{SDL_LIB_DIR}", "SDL2.lib", "SDL2main.lib", "opengl32.lib"]
+    else:
+        EXTRA_LDFLAGS = ["-lSDL2", "-lopengl32"]
+        SDL_INCLUDE = "C:/SDL2/include"
 elif IS_MACOS:
     LIB_EXT = ".dylib"
+    LIB_PREFIX = "lib"
     CC = "clang"
     CXX = "clang++"
     EXTRA_CFLAGS = ["-stdlib=libc++"]
-    EXTRA_LDFLAGS = ["-lSDL2", "-framework", "OpenGL"]
-    SDL_INCLUDE = "/usr/local/include/SDL2"  # Homebrew default
+    if CI_MODE and SDL2_PREFIX:
+        SDL_INCLUDE = f"{SDL2_PREFIX}/include/SDL2"
+        SDL_LIB_DIR = f"{SDL2_PREFIX}/lib"
+        EXTRA_LDFLAGS = [f"-L{SDL_LIB_DIR}", "-lSDL2", "-framework", "OpenGL"]
+    else:
+        EXTRA_LDFLAGS = ["-lSDL2", "-framework", "OpenGL"]
+        SDL_INCLUDE = "/usr/local/include/SDL2"
 else:  # Linux
     LIB_EXT = ".so"
+    LIB_PREFIX = "lib"
     CC = "gcc"
     CXX = "g++"
     EXTRA_CFLAGS = []
-    # Use the SDL2 library from bindings instead of system
-    EXTRA_LDFLAGS = ["-L../bindings", "-lSDL2-2.0", "-lGL", "-ldl", "-Wl,-rpath,$ORIGIN/../bindings"]
-    SDL_INCLUDE = "bindings/SDL2-2.32.4/include"  # Use headers from bindings too!
+    if CI_MODE and SDL2_PREFIX:
+        SDL_INCLUDE = f"{SDL2_PREFIX}/include/SDL2"
+        SDL_LIB_DIR = f"{SDL2_PREFIX}/lib"
+        EXTRA_LDFLAGS = [f"-L{SDL_LIB_DIR}", "-lSDL2", "-lGL", "-ldl", "-lm"]
+    else:
+        EXTRA_LDFLAGS = ["-L../bindings", "-lSDL2-2.0", "-lGL", "-ldl", "-Wl,-rpath,$ORIGIN/../bindings"]
+        SDL_INCLUDE = "bindings/SDL2-2.32.4/include"
 
 # Colors for output
 class Colors:
@@ -172,12 +202,20 @@ def ensure_directories():
 
 def build_library():
     """Build the complete ImGui library"""
-    print_step("Building ImGui library...")
+    print_step("Building cimgui library...")
     
-    # Copy our wrapper files into cimgui temporarily
-    print("  Copying wrapper files...")
-    shutil.copy("imgui_backends/cimgui_sdl2_opengl3.cpp", "cimgui/")
-    shutil.copy("imgui_backends/cimgui_sdl2_opengl3.h", "cimgui/")
+    # Ensure install directory exists
+    INSTALL_PREFIX.mkdir(parents=True, exist_ok=True)
+    
+    # Copy our wrapper files into cimgui temporarily (if they exist)
+    wrapper_cpp = Path("imgui_backends/cimgui_sdl2_opengl3.cpp")
+    wrapper_h = Path("imgui_backends/cimgui_sdl2_opengl3.h")
+    has_wrappers = wrapper_cpp.exists() and wrapper_h.exists()
+    
+    if has_wrappers:
+        print("  Including SDL2/OpenGL3 wrappers...")
+        shutil.copy(wrapper_cpp, "cimgui/")
+        shutil.copy(wrapper_h, "cimgui/")
     
     # Change to cimgui directory
     os.chdir("cimgui")
@@ -243,12 +281,40 @@ def build_library():
         if os.path.exists(obj):
             os.remove(obj)
     
-    # Copy successful build to libs
+    # Copy successful build to install location
     if not failed and os.path.exists(output):
         os.chdir("..")
-        shutil.copy(f"cimgui/{output}", f"libs/{output}")
+        
+        # Install library
+        if CI_MODE:
+            # For CI, install to proper directories
+            lib_dir = INSTALL_PREFIX / "lib"
+            bin_dir = INSTALL_PREFIX / "bin"
+            inc_dir = INSTALL_PREFIX / "include" / "cimgui"
+            
+            lib_dir.mkdir(parents=True, exist_ok=True)
+            inc_dir.mkdir(parents=True, exist_ok=True)
+            
+            if IS_WINDOWS:
+                bin_dir.mkdir(parents=True, exist_ok=True)
+                shutil.copy(f"cimgui/{output}", bin_dir / output)
+                # Also need .lib file for Windows
+                lib_output = output.replace(".dll", ".lib")
+                if os.path.exists(f"cimgui/{lib_output}"):
+                    shutil.copy(f"cimgui/{lib_output}", lib_dir / lib_output)
+            else:
+                shutil.copy(f"cimgui/{output}", lib_dir / output)
+            
+            # Install headers
+            shutil.copy("cimgui/cimgui.h", inc_dir / "cimgui.h")
+            if has_wrappers:
+                shutil.copy(wrapper_h, inc_dir / "cimgui_sdl2_opengl3.h")
+        else:
+            # For local development, just put in libs/
+            shutil.copy(f"cimgui/{output}", INSTALL_PREFIX / output)
+        
         os.remove(f"cimgui/{output}")
-        print_success(f"Library built: libs/{output}")
+        print_success(f"Library installed to: {INSTALL_PREFIX}")
         return True
     
     os.chdir("..")
@@ -352,42 +418,51 @@ end
 
 def main():
     print(f"{Colors.BOLD}{'='*60}")
-    print(f"   ImGui + Rock Build System")
+    print(f"   cimgui Build System")
     print(f"   Platform: {SYSTEM}")
+    print(f"   Mode: {'CI' if CI_MODE else 'Local Development'}")
+    if CI_MODE:
+        print(f"   SDL2: {SDL2_PREFIX}")
+        print(f"   Install: {INSTALL_PREFIX}")
     print(f"{'='*60}{Colors.ENDC}")
     
-    # Check everything
-    if not check_dependencies():
-        print_error("\nBuild aborted: Missing dependencies")
-        return 1
+    # In CI mode, skip some checks
+    if not CI_MODE:
+        if not check_dependencies():
+            print_error("\nBuild aborted: Missing dependencies")
+            return 1
     
     if not check_submodule():
         print_error("\nBuild aborted: Submodule issues")
         return 1
     
-    if not ensure_directories():
-        print_error("\nBuild aborted: Directory setup failed")
-        return 1
+    if not CI_MODE:
+        if not ensure_directories():
+            print_error("\nBuild aborted: Directory setup failed")
+            return 1
     
     # Build
     if not build_library():
         print_error("\nBuild failed!")
         return 1
     
-    # Update Rock file
-    if not update_rock_file():
-        print_warning("\nCould not update Rock file")
-    
-    # Test
-    if test_build():
+    # Only update Rock files and test in local mode
+    if not CI_MODE:
+        if not update_rock_file():
+            print_warning("\nCould not update Rock file")
+        
+        if test_build():
+            print(f"\n{Colors.GREEN}{Colors.BOLD}{'='*60}")
+            print(f"   ✅ BUILD SUCCESSFUL!")
+            print(f"{'='*60}{Colors.ENDC}")
+            print(f"\nLibrary location: {INSTALL_PREFIX}/{LIB_PREFIX}cimgui_complete{LIB_EXT}")
+        else:
+            print_warning("\nBuild completed but test failed")
+    else:
         print(f"\n{Colors.GREEN}{Colors.BOLD}{'='*60}")
         print(f"   ✅ BUILD SUCCESSFUL!")
         print(f"{'='*60}{Colors.ENDC}")
-        print(f"\nLibrary location: libs/cimgui_complete{LIB_EXT}")
-        print(f"You can now compile and run test_gl_triangle.rock")
-    else:
-        print_warning("\nBuild completed but test failed")
-        print("The library was built but may have issues")
+        print(f"\nLibrary installed to: {INSTALL_PREFIX}")
     
     return 0
 

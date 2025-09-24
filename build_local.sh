@@ -50,7 +50,7 @@ cd ../..
 
 # Build cimgui
 echo "Building cimgui (ImGui C wrapper)..."
-python3 build_imgui_ci.py \
+python3 build_imgui.py \
   $PWD/prebuilt/linux/x86_64 \
   $PWD/prebuilt/linux/x86_64
 

@@ -173,7 +173,7 @@ jobs:
     
     - name: Build cimgui (ImGui C wrapper)
       run: |
-        python3 build_cimgui_cmake.py \
+        python3 build_imgui.py \
           $PWD/prebuilt/linux/x86_64 \
           $PWD/prebuilt/linux/x86_64
     
@@ -340,7 +340,7 @@ jobs:
     - name: Build cimgui (ImGui C wrapper)
       shell: bash
       run: |
-        python build_cimgui_cmake.py \
+        python build_imgui.py \
           $PWD/prebuilt/windows/x86_64 \
           $PWD/prebuilt/windows/x86_64
     
