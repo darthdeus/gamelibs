@@ -29,7 +29,7 @@ ffi.cdef[[
         SDL_INIT_VIDEO = 0x00000020,
         SDL_INIT_TIMER = 0x00000001
     } SDL_InitFlag;
-    
+
     typedef enum {
         SDL_WINDOWPOS_UNDEFINED = 0x1FFF0000,
         SDL_WINDOW_SHOWN = 0x00000004,
@@ -37,7 +37,7 @@ ffi.cdef[[
         SDL_WINDOW_RESIZABLE = 0x00000020,
         SDL_WINDOW_ALLOW_HIGHDPI = 0x00002000
     } SDL_WindowFlags;
-    
+
     typedef union SDL_Event {
         uint32_t type;
         struct {
@@ -55,19 +55,19 @@ ffi.cdef[[
         } key;
         char padding[56];
     } SDL_Event;
-    
+
     typedef enum {
         SDL_QUIT = 0x100,
         SDL_KEYDOWN = 0x300,
         SDL_WINDOWEVENT = 0x200
     } SDL_EventType;
-    
+
     typedef enum {
         SDLK_ESCAPE = 27
     } SDL_Keycode;
 
     typedef void* SDL_GLContext;
-    
+
     int SDL_Init(uint32_t flags);
     void SDL_Quit(void);
     SDL_Window* SDL_CreateWindow(const char* title, int x, int y, int w, int h, uint32_t flags);
@@ -78,14 +78,14 @@ ffi.cdef[[
     uint32_t SDL_GetTicks(void);
     void SDL_GetWindowSize(SDL_Window* window, int* w, int* h);
     int SDL_GL_SetAttribute(int attr, int value);
-    
+
     // OpenGL context functions
     SDL_GLContext SDL_GL_CreateContext(SDL_Window* window);
     void SDL_GL_DeleteContext(SDL_GLContext context);
     int SDL_GL_SetSwapInterval(int interval);
     void SDL_GL_SwapWindow(SDL_Window* window);
     void* SDL_GL_GetProcAddress(const char* proc);
-    
+
     // Surface functions for screenshots
     typedef struct SDL_Surface {
         uint32_t flags;
@@ -100,10 +100,10 @@ ffi.cdef[[
         void* map;
         int refcount;
     } SDL_Surface;
-    
+
     SDL_Surface* SDL_CreateRGBSurfaceWithFormat(uint32_t flags, int width, int height, int depth, uint32_t format);
     void SDL_FreeSurface(SDL_Surface* surface);
-    
+
     // File I/O
     typedef struct SDL_RWops SDL_RWops;
     SDL_RWops* SDL_RWFromFile(const char* file, const char* mode);
@@ -126,17 +126,17 @@ ffi.cdef[[
     typedef signed long FT_Pos;
     typedef signed long FT_Fixed;
     typedef signed long FT_F26Dot6;
-    
+
     typedef struct FT_Vector_ {
         FT_Pos x;
         FT_Pos y;
     } FT_Vector;
-    
+
     typedef struct FT_BBox_ {
         FT_Pos xMin, yMin;
         FT_Pos xMax, yMax;
     } FT_BBox;
-    
+
     typedef struct FT_Bitmap_ {
         unsigned int rows;
         unsigned int width;
@@ -147,7 +147,7 @@ ffi.cdef[[
         unsigned char palette_mode;
         void* palette;
     } FT_Bitmap;
-    
+
     typedef struct FT_Glyph_Metrics_ {
         FT_Pos width;
         FT_Pos height;
@@ -158,9 +158,9 @@ ffi.cdef[[
         FT_Pos vertBearingY;
         FT_Pos vertAdvance;
     } FT_Glyph_Metrics;
-    
+
     typedef struct FT_GlyphSlotRec_* FT_GlyphSlot;
-    
+
     typedef struct FT_GlyphSlotRec_ {
         FT_Library library;
         FT_Face face;
@@ -178,7 +178,7 @@ ffi.cdef[[
         FT_Int bitmap_top;
         // ... more fields we don't need
     } FT_GlyphSlotRec;
-    
+
     typedef struct FT_Size_Metrics_ {
         FT_UShort x_ppem;
         FT_UShort y_ppem;
@@ -189,9 +189,9 @@ ffi.cdef[[
         FT_Pos height;
         FT_Pos max_advance;
     } FT_Size_Metrics;
-    
+
     typedef struct FT_SizeRec_* FT_Size;
-    
+
     typedef struct FT_FaceRec_ {
         FT_Long num_faces;
         FT_Long face_index;
@@ -220,7 +220,7 @@ ffi.cdef[[
         void* charmap;
         // ... more fields
     } FT_FaceRec;
-    
+
     // FreeType functions
     FT_Error FT_Init_FreeType(FT_Library* library);
     FT_Error FT_New_Face(FT_Library library, const char* filepathname, FT_Long face_index, FT_Face* aface);
@@ -233,11 +233,11 @@ ffi.cdef[[
     FT_Error FT_Render_Glyph(FT_GlyphSlot slot, int render_mode);
     FT_Error FT_Done_Face(FT_Face face);
     FT_Error FT_Done_FreeType(FT_Library library);
-    
+
     // Load flags
     static const int FT_LOAD_DEFAULT = 0;
     static const int FT_LOAD_RENDER = 4;
-    
+
     // Render modes
     static const int FT_RENDER_MODE_NORMAL = 0;
     static const int FT_RENDER_MODE_MONO = 1;
@@ -250,7 +250,7 @@ ffi.cdef[[
     typedef struct ImFont ImFont;
     typedef struct ImVec2 { float x, y; } ImVec2;
     typedef struct ImVec4 { float x, y, z, w; } ImVec4;
-    
+
     // ImGuiIO structure - partial definition with fields we need
     typedef struct ImGuiIO {
         int ConfigFlags;
@@ -266,7 +266,7 @@ ffi.cdef[[
         int MetricsRenderWindows;
         int MetricsActiveWindows;
     } ImGuiIO;
-    
+
     // Core ImGui functions
     ImGuiContext* igCreateContext(ImFont* shared_font_atlas);
     void igDestroyContext(ImGuiContext* ctx);
@@ -280,15 +280,17 @@ ffi.cdef[[
     void igText(const char* fmt, ...);
     bool igButton(const char* label, ImVec2 size);
     bool igSliderFloat(const char* label, float* v, float v_min, float v_max, const char* format, int flags);
+    bool igSliderInt(const char* label, int* v, int v_min, int v_max, const char* format, int flags);
     bool igColorEdit3(const char* label, float col[3], int flags);
     bool igCheckbox(const char* label, bool* v);
-    
+    void igSeparator(void);
+
     // SDL2 backend functions (from our wrapper)
     bool cImGui_ImplSDL2_InitForOpenGL(SDL_Window* window, void* sdl_gl_context);
     void cImGui_ImplSDL2_Shutdown(void);
     void cImGui_ImplSDL2_NewFrame(void);
     bool cImGui_ImplSDL2_ProcessEvent(const SDL_Event* event);
-    
+
     // OpenGL3 backend functions (from our wrapper)
     bool cImGui_ImplOpenGL3_Init(const char* glsl_version);
     void cImGui_ImplOpenGL3_Shutdown(void);
@@ -490,9 +492,10 @@ if not font_loaded then
     print("Warning: Could not load a system font")
 end
 
--- Set font size
+-- Initial font rasterization size
+local raster_size = ffi.new("int[1]", 48)
 if font_loaded then
-    ft.FT_Set_Pixel_Sizes(ft_face[0], 0, 48)
+    ft.FT_Set_Pixel_Sizes(ft_face[0], 0, raster_size[0])
 end
 
 -- Shader source code for triangle
@@ -515,6 +518,9 @@ void main()
 ]]
 
 -- Shader source code for text rendering
+-- NOTE: We use Y-up coordinate system (OpenGL default)
+-- Positive Y goes upward, origin at center of screen
+-- Text baseline calculations assume Y-up
 local textVertexShaderSource = [[
 #version 330 core
 layout (location = 0) in vec4 vertex;
@@ -533,7 +539,7 @@ out vec4 FragColor;
 uniform sampler2D text;
 uniform vec3 textColor;
 void main()
-{    
+{
     vec4 sampled = vec4(1.0, 1.0, 1.0, texture(text, TexCoord).r);
     FragColor = vec4(textColor, 1.0) * sampled;
 }
@@ -659,61 +665,10 @@ print("Setup complete!")
 print("Using libraries from: " .. lib_path)
 print("Press Escape or close window to exit...")
 
--- Function to create texture from FreeType glyph and render it
-local function renderChar(char, x, y, scale)
-    if not font_loaded then return end
-    
-    -- Load character
-    if ft.FT_Load_Char(ft_face[0], string.byte(char), 4) ~= 0 then  -- FT_LOAD_RENDER = 4
-        return
-    end
-    
-    local glyph = ft_face[0].glyph
-    local bitmap = glyph.bitmap
-    
-    if bitmap.width == 0 or bitmap.rows == 0 then
-        return
-    end
-    
-    -- Generate texture if not already done
-    if textTexture[0] == 0 then
-        glGenTextures(1, textTexture)
-    end
-    glBindTexture(GL_TEXTURE_2D, textTexture[0])
-    
-    -- Use GL_ALPHA for single-channel FreeType bitmap
-    glPixelStorei(0x0CF5, 1)  -- GL_UNPACK_ALIGNMENT = 1
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, bitmap.width, bitmap.rows, 
-                 0, GL_RED, GL_UNSIGNED_BYTE, bitmap.buffer)
-    
-    -- Set texture options
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE)
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE)
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
-    
-    -- Calculate size
-    local w = bitmap.width * scale
-    local h = bitmap.rows * scale
-    
-    -- Update VBO for this character
-    local quadVertices = ffi.new("float[24]", {
-        -- positions     -- texture coords
-        x,     y + h,    0.0, 0.0,  -- top left
-        x,     y,        0.0, 1.0,  -- bottom left
-        x + w, y,        1.0, 1.0,  -- bottom right
-        
-        x,     y + h,    0.0, 0.0,  -- top left
-        x + w, y,        1.0, 1.0,  -- bottom right
-        x + w, y + h,    1.0, 0.0   -- top right
-    })
-    
-    glBindVertexArray(textVAO[0])
-    glBindBuffer(GL_ARRAY_BUFFER, textVBO[0])
-    glBufferSubData(GL_ARRAY_BUFFER, 0, ffi.sizeof(quadVertices), quadVertices)
-    glBindBuffer(GL_ARRAY_BUFFER, 0)
-    glBindVertexArray(0)
-end
+-- Unused function - kept for reference, should be removed or integrated with texture atlas approach
+-- local function renderChar(char, x, y, scale)
+--     -- Function body removed for code cleanliness
+-- end
 
 -- ImGui demo window state
 local show_demo = ffi.new("bool[1]", false)  -- Hidden for debugging
@@ -745,11 +700,11 @@ while running do
         frame_count = 0
         last_time = current_time
     end
-    
+
     -- Poll events
     while SDL.SDL_PollEvent(event) ~= 0 do
         imgui.cImGui_ImplSDL2_ProcessEvent(event)
-        
+
         if event.type == SDL.SDL_QUIT then
             running = false
         elseif event.type == SDL.SDL_KEYDOWN then
@@ -758,53 +713,45 @@ while running do
             end
         end
     end
-    
+
     -- Start ImGui frame
     imgui.cImGui_ImplOpenGL3_NewFrame()
     imgui.cImGui_ImplSDL2_NewFrame()
     imgui.igNewFrame()
-    
+
     -- Show demo window
     if show_demo[0] then
         imgui.igShowDemoWindow(show_demo)
     end
-    
-    -- Create a custom window (hidden for debugging)
-    if false then
-        if imgui.igBegin("Hello from Lua!", nil, 0) then
-            imgui.igText("This is ImGui running in LuaJIT!")
-            imgui.igText("Libraries loaded from: " .. lib_path)
-            
-            imgui.igCheckbox("Demo Window", show_demo)
-            imgui.igCheckbox("Another Window", show_another)
-            
-            imgui.igSliderFloat("Triangle Size", slider_value, 0.1, 1.0, "%.3f", 0)
-            imgui.igColorEdit3("Clear color", clear_color, 0)
-            
-            if imgui.igButton("Button", ffi.new("ImVec2", {0, 0})) then
-                counter = counter + 1
+
+    -- Create a custom window with FreeType controls
+    if imgui.igBegin("FreeType Controls", nil, 0) then
+        -- FreeType rasterization controls
+        imgui.igText("FreeType Text Rendering")
+        imgui.igSeparator()
+
+        if font_loaded then
+            local face = ft_face[0]
+            imgui.igText(string.format("Font: %s", ffi.string(face.family_name or "Unknown")))
+
+            -- Rasterization size slider
+            if imgui.igSliderInt("Raster Size", raster_size, 12, 200, "%d pixels", 0) then
+                -- Re-set the pixel size when slider changes
+                ft.FT_Set_Pixel_Sizes(ft_face[0], 0, raster_size[0])
             end
-            imgui.igText(string.format("Button clicked %d times", counter))
-            
-            imgui.igCheckbox("Show Triangle", checkbox_value)
-            
-            -- FreeType status
-            if font_loaded then
-                local face = ft_face[0]
-                imgui.igText(string.format("FreeType Font: %s %s", 
-                    ffi.string(face.family_name or "Unknown"),
-                    ffi.string(face.style_name or "")))
-                imgui.igText(string.format("Font size: 48px, Glyphs: %d", face.num_glyphs))
-            else
-                imgui.igText("FreeType: No font loaded")
-            end
-            
-            -- FPS display
-            imgui.igText(string.format("FPS: %.1f", fps))
+
+            imgui.igText(string.format("Current: %dx%d pixels", raster_size[0], raster_size[0]))
+            imgui.igText("Tip: Higher = sharper text")
+        else
+            imgui.igText("FreeType: No font loaded")
         end
-        imgui.igEnd()
+
+        imgui.igSeparator()
+        imgui.igColorEdit3("Background", clear_color, 0)
+        imgui.igText(string.format("FPS: %.1f", fps))
     end
-    
+    imgui.igEnd()
+
     -- Show another window
     if show_another[0] then
         if imgui.igBegin("Another Window", show_another, 0) then
@@ -815,17 +762,17 @@ while running do
         end
         imgui.igEnd()
     end
-    
+
     -- Rendering
     imgui.igRender()
-    
+
     local display_w = ffi.new("int[1]")
     local display_h = ffi.new("int[1]")
     SDL.SDL_GetWindowSize(window, display_w, display_h)
     glViewport(0, 0, display_w[0], display_h[0])
     glClearColor(clear_color[0], clear_color[1], clear_color[2], 1.0)
     glClear(GL_COLOR_BUFFER_BIT)
-    
+
     -- Draw triangle if checkbox is enabled
     if checkbox_value[0] then
         -- Update triangle vertices based on slider
@@ -833,75 +780,76 @@ while running do
         vertices[0] = -0.5 * size  -- bottom left x
         vertices[3] = 0.5 * size   -- bottom right x
         vertices[7] = 0.5 * size   -- top y
-        
+
         glBindBuffer(GL_ARRAY_BUFFER, VBO[0])
         glBufferData(GL_ARRAY_BUFFER, ffi.sizeof(vertices), vertices, GL_STATIC_DRAW)
-        
+
         glUseProgram(shaderProgram)
         glBindVertexArray(VAO[0])
         glDrawArrays(GL_TRIANGLES, 0, 3)
     end
-    
+
     -- Draw FreeType text
     if font_loaded then
         -- Enable blending for text
         glEnable(GL_BLEND)
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
-        
+
         -- Setup text shader
         glUseProgram(textShaderProgram)
-        
-        -- Load glUniform3f function
-        glUniform3f = ffi.cast("void (*)(int, float, float, float)", loadGLFunction("glUniform3f"))
-        
+
         -- Set text color uniform (white)
         local textColorLoc = glGetUniformLocation(textShaderProgram, "textColor")
         glUniform3f(textColorLoc, 1.0, 1.0, 1.0)
-        
+
         -- Bind texture uniform
         local textureLoc = glGetUniformLocation(textShaderProgram, "text")
         glUniform1i(textureLoc, 0)
-        
+
         -- Render text string
+        -- TODO: Optimize text rendering with texture atlas to avoid per-character texture uploads
+        -- Current implementation re-uploads texture for every character which is inefficient
         local text = "Hello FreeType!"
         local text_x = -0.8  -- Use a different variable name
         local text_y = -0.2
-        local scale = 0.003  -- Scale factor for text size (bigger for better quality)
-        
+        -- Scale based on rasterization size to maintain consistent visual size
+        -- Target visual size: about 48 pixels, adjust based on actual raster size
+        local scale = 0.003 * (48.0 / raster_size[0])
+
         for i = 1, #text do
             local char = text:sub(i,i)
             if char == " " then
                 text_x = text_x + 0.02  -- Space width (adjusted for scale)
             else
                 -- Load and render character
-                if ft.FT_Load_Char(ft_face[0], string.byte(char), 4) == 0 then  -- FT_LOAD_RENDER = 4
+                if ft.FT_Load_Char(ft_face[0], string.byte(char), ft.FT_LOAD_RENDER) == 0 then
                     local glyph = ft_face[0].glyph
                     local bitmap = glyph.bitmap
-                    
+
                     if bitmap.width > 0 and bitmap.rows > 0 then
                         -- Generate or reuse texture
                         if textTexture[0] == 0 then
                             glGenTextures(1, textTexture)
                         end
                         glBindTexture(GL_TEXTURE_2D, textTexture[0])
-                        
+
                         -- Upload glyph bitmap to texture
                         glPixelStorei(GL_UNPACK_ALIGNMENT, 1)
-                        glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, bitmap.width, bitmap.rows, 
+                        glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, bitmap.width, bitmap.rows,
                                      0, GL_RED, GL_UNSIGNED_BYTE, bitmap.buffer)
-                        
+
                         -- Set texture parameters
                         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE)
                         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE)
                         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
                         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
-                        
+
                         -- Calculate size and position with proper baseline
                         local w = bitmap.width * scale
                         local h = bitmap.rows * scale
                         local xpos = text_x + glyph.bitmap_left * scale
                         local ypos = text_y - (bitmap.rows - glyph.bitmap_top) * scale
-                        
+
                         -- Update VBO with quad for this character
                         -- Keep original texture coordinates (no flip)
                         local quadVertices = ffi.new("float[24]", {
@@ -909,58 +857,58 @@ while running do
                             xpos,     ypos + h,    0.0, 0.0,  -- top left
                             xpos,     ypos,        0.0, 1.0,  -- bottom left
                             xpos + w, ypos,        1.0, 1.0,  -- bottom right
-                            
+
                             xpos,     ypos + h,    0.0, 0.0,  -- top left
                             xpos + w, ypos,        1.0, 1.0,  -- bottom right
                             xpos + w, ypos + h,    1.0, 0.0   -- top right
                         })
-                        
+
                         glBindBuffer(GL_ARRAY_BUFFER, textVBO[0])
                         glBufferSubData(GL_ARRAY_BUFFER, 0, ffi.sizeof(quadVertices), quadVertices)
-                        
+
                         -- Draw this character immediately
                         glActiveTexture(GL_TEXTURE0)
                         glBindTexture(GL_TEXTURE_2D, textTexture[0])
                         glBindVertexArray(textVAO[0])
                         glDrawArrays(GL_TRIANGLES, 0, 6)
-                        
+
                         -- Move to next character position
                         -- advance.x is in 26.6 fixed-point format (1/64 pixels)
                         local advance_pixels = tonumber(glyph.advance.x) / 64
                         text_x = text_x + advance_pixels * scale
-                        
+
                     end
                 end
             end
         end
-        
+
         glDisable(GL_BLEND)
     end
-    
+
     imgui.cImGui_ImplOpenGL3_RenderDrawData(imgui.igGetDrawData())
-    
+
     -- Take screenshot on 5th frame
     total_frames = total_frames + 1
     if total_frames == 5 and not screenshot_taken then
         screenshot_taken = true
-        
+
         -- Get window size
         local w = ffi.new("int[1]")
         local h = ffi.new("int[1]")
         SDL.SDL_GetWindowSize(window, w, h)
         local width = w[0]
         local height = h[0]
-        
+
         -- Allocate buffer for pixels
         local pixels = ffi.new("uint8_t[?]", width * height * 4)
-        
+
         -- Read pixels from OpenGL framebuffer
         glPixelStorei(GL_PACK_ALIGNMENT, 1)
         glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, pixels)
-        
+
         -- Create SDL surface (note: OpenGL pixels are upside down)
         local surface = SDL.SDL_CreateRGBSurfaceWithFormat(0, width, height, 32, 0x16762004) -- SDL_PIXELFORMAT_ABGR8888
-        
+
         if surface ~= nil then
             -- Copy pixels to surface (flip vertically)
             local surface_pixels = ffi.cast("uint8_t*", surface.pixels)
@@ -974,7 +922,7 @@ while running do
                     surface_pixels[dst_idx + 3] = pixels[src_idx + 3] -- A
                 end
             end
-            
+
             -- Convert to PNG using stb_image_write or save as BMP
             -- For now, save as BMP then convert
             local rw = SDL.SDL_RWFromFile("screenshot.bmp", "wb")
@@ -984,16 +932,16 @@ while running do
             else
                 print("Failed to open file for writing")
             end
-            
+
             -- Convert BMP to PNG using ImageMagick if available
             os.execute("convert screenshot.bmp screenshot.png 2>/dev/null && rm screenshot.bmp && echo 'Converted to screenshot.png' || echo 'PNG conversion failed, kept as BMP'")
-            
+
             SDL.SDL_FreeSurface(surface)
         else
             print("Failed to create surface for screenshot")
         end
     end
-    
+
     SDL.SDL_GL_SwapWindow(window)
 end
 
