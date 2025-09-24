@@ -27,7 +27,7 @@ LIBVORBIS_URL = f"https://downloads.xiph.org/releases/vorbis/libvorbis-{LIBVORBI
 FLAC_VERSION = "1.4.3"
 FLAC_URL = f"https://downloads.xiph.org/releases/flac/flac-{FLAC_VERSION}.tar.xz"
 
-MPG123_VERSION = "1.32.3"
+MPG123_VERSION = "1.32.10"
 MPG123_URL = f"https://sourceforge.net/projects/mpg123/files/mpg123/{MPG123_VERSION}/mpg123-{MPG123_VERSION}.tar.bz2"
 
 def get_platform():
@@ -93,7 +93,8 @@ def build_libogg(build_dir, install_dir, platform_name):
         f"-DCMAKE_INSTALL_PREFIX={install_dir}",
         "-DBUILD_SHARED_LIBS=OFF",
         "-DCMAKE_BUILD_TYPE=Release",
-        "-DCMAKE_POLICY_VERSION_MINIMUM=3.5"  # Allow older CMakeLists.txt
+        "-DCMAKE_POLICY_VERSION_MINIMUM=3.5",  # Allow older CMakeLists.txt
+        "-DCMAKE_POSITION_INDEPENDENT_CODE=ON"  # Build with -fPIC for shared lib linking
     ]
     
     if platform_name == "windows":
@@ -131,7 +132,8 @@ def build_libvorbis(build_dir, install_dir, platform_name):
         f"-DOGG_ROOT={install_dir}",
         "-DBUILD_SHARED_LIBS=OFF",
         "-DCMAKE_BUILD_TYPE=Release",
-        "-DCMAKE_POLICY_VERSION_MINIMUM=3.5"  # Allow older CMakeLists.txt
+        "-DCMAKE_POLICY_VERSION_MINIMUM=3.5",  # Allow older CMakeLists.txt
+        "-DCMAKE_POSITION_INDEPENDENT_CODE=ON"  # Build with -fPIC for shared lib linking
     ]
     
     if platform_name == "windows":
@@ -175,7 +177,8 @@ def build_flac(build_dir, install_dir, platform_name):
         "-DINSTALL_MANPAGES=OFF",
         "-DWITH_OGG=ON",
         "-DCMAKE_BUILD_TYPE=Release",
-        "-DCMAKE_POLICY_VERSION_MINIMUM=3.5"  # Allow older CMakeLists.txt
+        "-DCMAKE_POLICY_VERSION_MINIMUM=3.5",  # Allow older CMakeLists.txt
+        "-DCMAKE_POSITION_INDEPENDENT_CODE=ON"  # Build with -fPIC for shared lib linking
     ]
     
     if platform_name == "windows":
@@ -236,7 +239,8 @@ def build_mpg123(build_dir, install_dir, platform_name):
             "--enable-static",
             "--disable-shared",
             "--with-audio=dummy",  # We only need decoding, not audio output
-            "--enable-int-quality=yes"
+            "--enable-int-quality=yes",
+            "--with-pic"  # Build with -fPIC for shared lib linking
         ]
         
         if platform_name == "macos":
@@ -299,6 +303,7 @@ def build_sdl_mixer(build_dir, install_dir, platform_name):
         "-DSDL2MIXER_MOD=OFF",  # Disable MOD support (no modplug/xmp)
         "-DSDL2MIXER_MIDI=OFF",  # Disable MIDI for now
         "-DSDL2MIXER_OPUS=OFF",  # Disable Opus for now
+        "-DSDL2MIXER_WAVPACK=OFF",  # Disable WavPack support
         f"-DOGG_LIBRARY={install_dir}/lib/libogg.a",
         f"-DOGG_INCLUDE_DIR={install_dir}/include",
         f"-DVORBIS_LIBRARY={install_dir}/lib/libvorbis.a",
