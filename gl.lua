@@ -90,11 +90,26 @@ ffi.cdef[[
 -- ImGui C definitions (from cimgui)
 ffi.cdef[[
     typedef struct ImGuiContext ImGuiContext;
-    typedef struct ImGuiIO ImGuiIO;
     typedef struct ImDrawData ImDrawData;
     typedef struct ImFont ImFont;
     typedef struct ImVec2 { float x, y; } ImVec2;
     typedef struct ImVec4 { float x, y, z, w; } ImVec4;
+    
+    // ImGuiIO structure - partial definition with fields we need
+    typedef struct ImGuiIO {
+        int ConfigFlags;
+        int BackendFlags;
+        ImVec2 DisplaySize;
+        ImVec2 DisplayFramebufferScale;
+        float DeltaTime;
+        // ... many config fields we skip ...
+        char _padding[256]; // Padding to reach the metrics fields
+        float Framerate;
+        int MetricsRenderVertices;
+        int MetricsRenderIndices;
+        int MetricsRenderWindows;
+        int MetricsActiveWindows;
+    } ImGuiIO;
     
     // Core ImGui functions
     ImGuiContext* igCreateContext(ImFont* shared_font_atlas);
@@ -334,11 +349,25 @@ local counter = 0
 local slider_value = ffi.new("float[1]", 0.5)
 local checkbox_value = ffi.new("bool[1]", false)
 
+-- FPS tracking
+local frame_count = 0
+local last_time = SDL.SDL_GetTicks()
+local fps = 0.0
+
 -- Main event loop
 local event = ffi.new("SDL_Event")
 local running = true
 
 while running do
+    -- FPS calculation
+    frame_count = frame_count + 1
+    local current_time = SDL.SDL_GetTicks()
+    if current_time - last_time >= 1000 then
+        fps = frame_count * 1000.0 / (current_time - last_time)
+        frame_count = 0
+        last_time = current_time
+    end
+    
     -- Poll events
     while SDL.SDL_PollEvent(event) ~= 0 do
         imgui.cImGui_ImplSDL2_ProcessEvent(event)
@@ -380,10 +409,8 @@ while running do
         
         imgui.igCheckbox("Show Triangle", checkbox_value)
         
-        local io = imgui.igGetIO_Nil()
-        imgui.igText(string.format("Application average %.3f ms/frame (%.1f FPS)", 
-            1000.0 / ffi.cast("ImGuiIO*", io).Framerate, 
-            ffi.cast("ImGuiIO*", io).Framerate))
+        -- FPS display
+        imgui.igText(string.format("FPS: %.1f", fps))
     end
     imgui.igEnd()
     

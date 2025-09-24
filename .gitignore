@@ -5,3 +5,5 @@ prebuilt/
 
 # Don't ignore the version file
 !.version
+
+imgui.ini
