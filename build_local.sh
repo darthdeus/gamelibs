@@ -1,10 +1,15 @@
 #!/bin/bash
 set -e
 
+# Initialize submodules
+echo "Initializing submodules..."
+git submodule update --init --recursive
+
 # Create build directories
 echo "Creating build directories..."
 mkdir -p build/SDL2
 mkdir -p build/freetype
+mkdir -p build/cimgui
 mkdir -p prebuilt/linux/x86_64
 
 # Build SDL2
@@ -43,13 +48,22 @@ make install
 
 cd ../..
 
+# Build cimgui
+echo "Building cimgui (ImGui C wrapper)..."
+python3 build_imgui_ci.py \
+  $PWD/prebuilt/linux/x86_64 \
+  $PWD/prebuilt/linux/x86_64
+
 # Create library info file
 echo "Creating library info..."
 cat > prebuilt/linux/x86_64/library_info.txt << EOF
 Built on: $(date)
 Platform: $(lsb_release -ds 2>/dev/null || echo "Linux")
-SDL2 Version: 2.32.4
-FreeType Version: 2.14.1
+
+Libraries included:
+- SDL2 Version: 2.32.4
+- FreeType Version: 2.14.1
+- cimgui (Dear ImGui C wrapper) with SDL2/OpenGL3 backends
 
 Libraries:
 $(ls -la prebuilt/linux/x86_64/lib/)
