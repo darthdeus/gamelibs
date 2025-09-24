@@ -3,6 +3,8 @@ name: Build Game Libraries
 on:
   push:
     branches: [ master, main ]
+    tags:
+      - 'v*'
   pull_request:
     branches: [ master, main ]
   workflow_dispatch:
@@ -106,13 +108,6 @@ jobs:
         $(ls -la prebuilt/linux/x86_64/include/)
         EOF
     
-    - name: Upload artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: linux-x86_64-libraries
-        path: prebuilt/linux/x86_64/
-        retention-days: 30
-    
     - name: List built files
       run: |
         echo "=== Built libraries ==="
@@ -120,3 +115,60 @@ jobs:
         echo ""
         echo "=== Header files ==="
         find prebuilt/linux/x86_64/include -type f -name "*.h" | head -20
+    
+    - name: Create release archive
+      run: |
+        cd prebuilt/linux/x86_64
+        zip -r ../../../gamelibs-linux-x86_64.zip .
+        cd ../../..
+        echo "Archive created: $(ls -lh gamelibs-linux-x86_64.zip)"
+    
+    - name: Generate release notes
+      if: startsWith(github.ref, 'refs/tags/')
+      run: |
+        cat > release_notes.md << EOF
+        ## Game Libraries Build
+        
+        **Date:** $(date -u +"%Y-%m-%d %H:%M UTC")
+        **Platform:** Ubuntu Linux x86_64
+        
+        ### Included Libraries
+        - **SDL2** v2.32.4 - Cross-platform multimedia library
+        - **FreeType** v2.14.1 - Font rendering library
+        
+        ### Build Configuration
+        - SDL2: ALSA, PulseAudio, X11, Wayland, OpenGL, OpenGLES, Vulkan support
+        - FreeType: PNG/zlib support, shared libraries
+        
+        ### Installation
+        Extract the archive to your preferred location. The structure includes:
+        - \`lib/\` - Compiled libraries (.so, .a files)
+        - \`include/\` - Header files
+        - \`bin/\` - Any executables (if applicable)
+        - \`lib/pkgconfig/\` - pkg-config files
+        
+        ### Usage
+        Set your build system to use:
+        - Include path: \`<extracted_path>/include\`
+        - Library path: \`<extracted_path>/lib\`
+        EOF
+    
+    - name: Create Release
+      if: startsWith(github.ref, 'refs/tags/')
+      uses: softprops/action-gh-release@v1
+      with:
+        name: Game Libraries ${{ github.ref_name }}
+        body_path: release_notes.md
+        files: gamelibs-linux-x86_64.zip
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Upload artifact (non-release builds)
+      if: "!startsWith(github.ref, 'refs/tags/')"
+      uses: actions/upload-artifact@v4
+      with:
+        name: gamelibs-linux-x86_64
+        path: gamelibs-linux-x86_64.zip
+        retention-days: 7
