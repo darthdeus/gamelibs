@@ -240,6 +240,16 @@ jobs:
         fi
         ls -la prebuilt/linux/x86_64/lib/libluajit* || true
     
+    - name: Build SDL_image
+      run: |
+        python3 build_sdl_image.py
+        echo "✓ SDL_image built with PNG, JPEG, and WebP support"
+    
+    - name: Build SDL_mixer
+      run: |
+        python3 build_sdl_mixer.py
+        echo "✓ SDL_mixer built with OGG, FLAC, and MP3 support"
+    
     - name: Create library info file
       run: |
         cat > prebuilt/linux/x86_64/library_info.txt << EOF
@@ -251,6 +261,8 @@ jobs:
         - FreeType Version: 2.14.1
         - cimgui (Dear ImGui C wrapper) with SDL2/OpenGL3 backends
         - LuaJIT 2.1 - Just-In-Time Compiler for Lua
+        - SDL_image 2.8.2 - Image loading (PNG, JPEG, WebP support)
+        - SDL_mixer 2.8.0 - Audio mixing (WAV, OGG, FLAC, MP3 support)
         
         Libraries:
         $(ls -la prebuilt/linux/x86_64/lib/)
@@ -488,6 +500,18 @@ jobs:
         ls -la prebuilt/windows/x86_64/lib/lua51* || true
         ls -la prebuilt/windows/x86_64/bin/lua* || true
     
+    - name: Build SDL_image
+      shell: bash
+      run: |
+        python build_sdl_image.py
+        echo "✓ SDL_image built with PNG, JPEG, and WebP support"
+    
+    - name: Build SDL_mixer
+      shell: bash
+      run: |
+        python build_sdl_mixer.py
+        echo "✓ SDL_mixer built with OGG, FLAC, and MP3 support"
+    
     - name: Create library info file
       shell: bash
       run: |
@@ -500,6 +524,8 @@ jobs:
         - FreeType Version: 2.14.1
         - cimgui (Dear ImGui C wrapper) with SDL2/OpenGL3 backends
         - LuaJIT 2.1 - Just-In-Time Compiler for Lua
+        - SDL_image 2.8.2 - Image loading (PNG, JPEG, WebP support)
+        - SDL_mixer 2.8.0 - Audio mixing (WAV, OGG, FLAC, MP3 support)
         
         Libraries:
         $(ls -la prebuilt/windows/x86_64/lib/)
@@ -711,6 +737,16 @@ jobs:
         fi
         ls -la prebuilt/macos/x86_64/lib/libluajit* || true
     
+    - name: Build SDL_image
+      run: |
+        python3 build_sdl_image.py
+        echo "✓ SDL_image built with PNG, JPEG, and WebP support"
+    
+    - name: Build SDL_mixer
+      run: |
+        python3 build_sdl_mixer.py
+        echo "✓ SDL_mixer built with OGG, FLAC, and MP3 support"
+    
     - name: Create library info file
       run: |
         cat > prebuilt/macos/x86_64/library_info.txt << EOF
@@ -723,6 +759,8 @@ jobs:
         - FreeType Version: 2.14.1
         - cimgui (Dear ImGui C wrapper) with SDL2/OpenGL3 backends
         - LuaJIT Version: 2.1
+        - SDL_image 2.8.2 - Image loading (PNG, JPEG, WebP support)
+        - SDL_mixer 2.8.0 - Audio mixing (WAV, OGG, FLAC, MP3 support)
         
         Library files:
         EOF
@@ -797,6 +835,8 @@ jobs:
         - **FreeType** v2.14.1 - Font rendering library
         - **cimgui** - Dear ImGui C wrapper with SDL2/OpenGL3 backends
         - **LuaJIT** 2.1 - Just-In-Time Compiler for Lua
+        - **SDL_image** v2.8.2 - Image loading (PNG, JPEG, WebP support)
+        - **SDL_mixer** v2.8.0 - Audio mixing (WAV, OGG, FLAC, MP3 support)
         
         ### Platform Builds
         - **Linux x86_64** (\`gamelibs-linux-x86_64.zip\`)
