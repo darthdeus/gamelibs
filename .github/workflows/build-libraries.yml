@@ -50,6 +50,10 @@ jobs:
         # Generate hash of cimgui source for cache key
         CIMGUI_HASH=$(find cimgui imgui_backends -type f -name '*.cpp' -o -name '*.h' -o -name '*.py' 2>/dev/null | xargs sha256sum 2>/dev/null | sha256sum | cut -d' ' -f1)
         echo "cimgui-hash=${CACHE_VERSION}-${CIMGUI_HASH}${CACHE_SUFFIX}" >> $GITHUB_OUTPUT
+        
+        # Generate hash of LuaJIT source for cache key
+        LUAJIT_HASH=$(find luajit -type f -name '*.c' -o -name '*.h' -o -name 'Makefile' | head -100 | xargs sha256sum | sha256sum | cut -d' ' -f1)
+        echo "luajit-hash=${CACHE_VERSION}-${LUAJIT_HASH}${CACHE_SUFFIX}" >> $GITHUB_OUTPUT
     
     - name: Cache SDL2 build
       id: cache-sdl2
@@ -181,19 +185,60 @@ jobs:
         fi
         ls -la prebuilt/linux/x86_64/lib/libfreetype* || true
     
+    - name: Cache cimgui
+      id: cache-cimgui
+      uses: actions/cache@v4
+      with:
+        path: |
+          prebuilt/linux/x86_64/lib/cimgui_complete.so
+          prebuilt/linux/x86_64/include/cimgui*
+          prebuilt/linux/x86_64/include/imgui_impl_*
+        key: cimgui-ubuntu-${{ steps.cache-keys.outputs.cimgui-hash }}
+    
     - name: Build cimgui (ImGui C wrapper)
+      if: steps.cache-cimgui.outputs.cache-hit != 'true'
       run: |
         python3 build_imgui.py \
           $PWD/prebuilt/linux/x86_64 \
           $PWD/prebuilt/linux/x86_64
     
+    - name: cimgui cache status
+      run: |
+        if [ "${{ steps.cache-cimgui.outputs.cache-hit }}" = "true" ]; then
+          echo "✓ cimgui restored from cache"
+        else
+          echo "✓ cimgui built from source"
+        fi
+        ls -la prebuilt/linux/x86_64/lib/cimgui* || true
+    
+    - name: Cache LuaJIT
+      id: cache-luajit
+      uses: actions/cache@v4
+      with:
+        path: |
+          prebuilt/linux/x86_64/lib/libluajit*
+          prebuilt/linux/x86_64/include/luajit-2.1
+          prebuilt/linux/x86_64/share/luajit*
+          prebuilt/linux/x86_64/bin/luajit*
+        key: luajit-ubuntu-${{ steps.cache-keys.outputs.luajit-hash }}
+    
     - name: Build LuaJIT
+      if: steps.cache-luajit.outputs.cache-hit != 'true'
       run: |
         cd luajit
         make -j$(nproc) PREFIX=$PWD/../prebuilt/linux/x86_64
         make install PREFIX=$PWD/../prebuilt/linux/x86_64
         cd ..
         echo "✓ LuaJIT built and installed"
+    
+    - name: LuaJIT cache status
+      run: |
+        if [ "${{ steps.cache-luajit.outputs.cache-hit }}" = "true" ]; then
+          echo "✓ LuaJIT restored from cache"
+        else
+          echo "✓ LuaJIT built from source"
+        fi
+        ls -la prebuilt/linux/x86_64/lib/libluajit* || true
     
     - name: Create library info file
       run: |
@@ -270,6 +315,14 @@ jobs:
         # Generate hash of FreeType source for cache key
         FT_HASH=$(find freetype-2.14.1 -type f -name '*.c' -o -name '*.h' -o -name 'CMakeLists.txt' | head -100 | xargs sha256sum | sha256sum | cut -d' ' -f1)
         echo "freetype-hash=${CACHE_VERSION}-${FT_HASH}${CACHE_SUFFIX}" >> $GITHUB_OUTPUT
+        
+        # Generate hash of cimgui source for cache key
+        CIMGUI_HASH=$(find cimgui -type f -name '*.cpp' -o -name '*.h' -o -name 'CMakeLists.txt' | head -100 | xargs sha256sum | sha256sum | cut -d' ' -f1)
+        echo "cimgui-hash=${CACHE_VERSION}-${CIMGUI_HASH}${CACHE_SUFFIX}" >> $GITHUB_OUTPUT
+        
+        # Generate hash of LuaJIT source for cache key
+        LUAJIT_HASH=$(find luajit -type f -name '*.c' -o -name '*.h' -o -name 'Makefile' | head -100 | xargs sha256sum | sha256sum | cut -d' ' -f1)
+        echo "luajit-hash=${CACHE_VERSION}-${LUAJIT_HASH}${CACHE_SUFFIX}" >> $GITHUB_OUTPUT
     
     - name: Cache SDL2 build
       id: cache-sdl2
@@ -362,17 +415,52 @@ jobs:
         ls -la prebuilt/windows/x86_64/lib/freetype* || true
         ls -la prebuilt/windows/x86_64/bin/freetype* || true
     
+    - name: Cache cimgui
+      id: cache-cimgui
+      uses: actions/cache@v3
+      with:
+        path: |
+          prebuilt/windows/x86_64/lib/cimgui*
+          prebuilt/windows/x86_64/bin/cimgui*
+          prebuilt/windows/x86_64/include/cimgui*
+          prebuilt/windows/x86_64/include/imgui_impl_*
+        key: cimgui-windows-${{ steps.cache-keys.outputs.cimgui-hash }}
+    
     - name: Setup MSVC
       uses: ilammy/msvc-dev-cmd@v1
       
     - name: Build cimgui (ImGui C wrapper)
+      if: steps.cache-cimgui.outputs.cache-hit != 'true'
       shell: cmd
       run: |
         python build_imgui.py ^
           %cd%\prebuilt\windows\x86_64 ^
           %cd%\prebuilt\windows\x86_64
     
+    - name: cimgui cache status
+      shell: bash
+      run: |
+        if [ "${{ steps.cache-cimgui.outputs.cache-hit }}" = "true" ]; then
+          echo "✓ cimgui restored from cache"
+        else
+          echo "✓ cimgui built from source"
+        fi
+        ls -la prebuilt/windows/x86_64/lib/cimgui* || true
+        ls -la prebuilt/windows/x86_64/bin/cimgui* || true
+    
+    - name: Cache LuaJIT
+      id: cache-luajit
+      uses: actions/cache@v3
+      with:
+        path: |
+          prebuilt/windows/x86_64/lib/lua51*
+          prebuilt/windows/x86_64/bin/lua51*
+          prebuilt/windows/x86_64/bin/luajit*
+          prebuilt/windows/x86_64/include/lua*
+        key: luajit-windows-${{ steps.cache-keys.outputs.luajit-hash }}
+    
     - name: Build LuaJIT (Windows)
+      if: steps.cache-luajit.outputs.cache-hit != 'true'
       shell: cmd
       run: |
         cd luajit\src
@@ -388,6 +476,17 @@ jobs:
         xcopy lua.hpp ..\..\prebuilt\windows\x86_64\include\ /Y
         cd ..\..
         echo LuaJIT built and installed
+    
+    - name: LuaJIT cache status
+      shell: bash
+      run: |
+        if [ "${{ steps.cache-luajit.outputs.cache-hit }}" = "true" ]; then
+          echo "✓ LuaJIT restored from cache"
+        else
+          echo "✓ LuaJIT built from source"
+        fi
+        ls -la prebuilt/windows/x86_64/lib/lua51* || true
+        ls -la prebuilt/windows/x86_64/bin/lua* || true
     
     - name: Create library info file
       shell: bash
@@ -448,6 +547,35 @@ jobs:
         git submodule update --init --recursive
         cd cimgui && git submodule update --init --recursive && cd ..
     
+    - name: Generate cache keys
+      id: cache-keys
+      run: |
+        # Cache version - increment this to force cache rebuild
+        CACHE_VERSION="v1"
+        
+        # Add manual cache clear suffix if requested
+        if [ "${{ github.event.inputs.clear_cache }}" = "true" ]; then
+          CACHE_SUFFIX="-cleared-$(date +%s)"
+        else
+          CACHE_SUFFIX=""
+        fi
+        
+        # Generate hash of SDL2 source for cache key
+        SDL2_HASH=$(find SDL2-2.32.4 -type f -name '*.c' -o -name '*.h' -o -name 'CMakeLists.txt' | head -100 | xargs shasum -a 256 | shasum -a 256 | cut -d' ' -f1)
+        echo "sdl2-hash=${CACHE_VERSION}-${SDL2_HASH}${CACHE_SUFFIX}" >> $GITHUB_OUTPUT
+        
+        # Generate hash of FreeType source for cache key
+        FT_HASH=$(find freetype-2.14.1 -type f -name '*.c' -o -name '*.h' -o -name 'CMakeLists.txt' | head -100 | xargs shasum -a 256 | shasum -a 256 | cut -d' ' -f1)
+        echo "freetype-hash=${CACHE_VERSION}-${FT_HASH}${CACHE_SUFFIX}" >> $GITHUB_OUTPUT
+        
+        # Generate hash of cimgui source for cache key
+        CIMGUI_HASH=$(find cimgui -type f -name '*.cpp' -o -name '*.h' -o -name 'CMakeLists.txt' | head -100 | xargs shasum -a 256 | shasum -a 256 | cut -d' ' -f1)
+        echo "cimgui-hash=${CACHE_VERSION}-${CIMGUI_HASH}${CACHE_SUFFIX}" >> $GITHUB_OUTPUT
+        
+        # Generate hash of LuaJIT source for cache key
+        LUAJIT_HASH=$(find luajit -type f -name '*.c' -o -name '*.h' -o -name 'Makefile' | head -100 | xargs shasum -a 256 | shasum -a 256 | cut -d' ' -f1)
+        echo "luajit-hash=${CACHE_VERSION}-${LUAJIT_HASH}${CACHE_SUFFIX}" >> $GITHUB_OUTPUT
+    
     - name: Setup build environment
       run: |
         brew install cmake ninja pkg-config
@@ -463,10 +591,10 @@ jobs:
       id: cache-sdl2
       uses: actions/cache@v4
       with:
-        path: prebuilt/macos/x86_64
-        key: macos-sdl2-${{ hashFiles('SDL2-2.32.4/**') }}-v1
-        restore-keys: |
-          macos-sdl2-
+        path: |
+          prebuilt/macos/x86_64/lib/libSDL2*
+          prebuilt/macos/x86_64/include/SDL2
+        key: macos-sdl2-${{ steps.cache-keys.outputs.sdl2-hash }}
     
     - name: Build SDL2
       if: steps.cache-sdl2.outputs.cache-hit != 'true'
@@ -495,10 +623,10 @@ jobs:
       id: cache-freetype
       uses: actions/cache@v4
       with:
-        path: prebuilt/macos/x86_64
-        key: macos-freetype-${{ hashFiles('freetype-2.14.1/**') }}-v1
-        restore-keys: |
-          macos-freetype-
+        path: |
+          prebuilt/macos/x86_64/lib/libfreetype*
+          prebuilt/macos/x86_64/include/freetype2
+        key: macos-freetype-${{ steps.cache-keys.outputs.freetype-hash }}
     
     - name: Build FreeType
       if: steps.cache-freetype.outputs.cache-hit != 'true'
@@ -528,19 +656,60 @@ jobs:
         fi
         ls -la prebuilt/macos/x86_64/lib/libfreetype* || true
     
+    - name: Cache cimgui
+      id: cache-cimgui
+      uses: actions/cache@v4
+      with:
+        path: |
+          prebuilt/macos/x86_64/lib/cimgui*
+          prebuilt/macos/x86_64/include/cimgui*
+          prebuilt/macos/x86_64/include/imgui_impl_*
+        key: cimgui-macos-${{ steps.cache-keys.outputs.cimgui-hash }}
+    
     - name: Build cimgui (ImGui C wrapper)
+      if: steps.cache-cimgui.outputs.cache-hit != 'true'
       run: |
         python3 build_imgui.py \
           $PWD/prebuilt/macos/x86_64 \
           $PWD/prebuilt/macos/x86_64
     
+    - name: cimgui cache status
+      run: |
+        if [ "${{ steps.cache-cimgui.outputs.cache-hit }}" = "true" ]; then
+          echo "✓ cimgui restored from cache"
+        else
+          echo "✓ cimgui built from source"
+        fi
+        ls -la prebuilt/macos/x86_64/lib/cimgui* || true
+    
+    - name: Cache LuaJIT
+      id: cache-luajit
+      uses: actions/cache@v4
+      with:
+        path: |
+          prebuilt/macos/x86_64/lib/libluajit*
+          prebuilt/macos/x86_64/include/luajit-2.1
+          prebuilt/macos/x86_64/share/luajit*
+          prebuilt/macos/x86_64/bin/luajit*
+        key: luajit-macos-${{ steps.cache-keys.outputs.luajit-hash }}
+    
     - name: Build LuaJIT
+      if: steps.cache-luajit.outputs.cache-hit != 'true'
       run: |
         cd luajit
         make -j$(sysctl -n hw.ncpu) PREFIX=$PWD/../prebuilt/macos/x86_64 MACOSX_DEPLOYMENT_TARGET=10.12
         make install PREFIX=$PWD/../prebuilt/macos/x86_64
         cd ..
         echo "✓ LuaJIT built and installed"
+    
+    - name: LuaJIT cache status
+      run: |
+        if [ "${{ steps.cache-luajit.outputs.cache-hit }}" = "true" ]; then
+          echo "✓ LuaJIT restored from cache"
+        else
+          echo "✓ LuaJIT built from source"
+        fi
+        ls -la prebuilt/macos/x86_64/lib/libluajit* || true
     
     - name: Create library info file
       run: |
