@@ -99,7 +99,7 @@ ffi.cdef[[
     // Core ImGui functions
     ImGuiContext* igCreateContext(ImFont* shared_font_atlas);
     void igDestroyContext(ImGuiContext* ctx);
-    ImGuiIO* igGetIO(void);
+    ImGuiIO* igGetIO_Nil(void);  // cimgui uses _Nil suffix for no-arg version
     void igNewFrame(void);
     void igRender(void);
     ImDrawData* igGetDrawData(void);
@@ -380,7 +380,7 @@ while running do
         
         imgui.igCheckbox("Show Triangle", checkbox_value)
         
-        local io = imgui.igGetIO()
+        local io = imgui.igGetIO_Nil()
         imgui.igText(string.format("Application average %.3f ms/frame (%.1f FPS)", 
             1000.0 / ffi.cast("ImGuiIO*", io).Framerate, 
             ffi.cast("ImGuiIO*", io).Framerate))
