@@ -18,11 +18,14 @@ help:
 	@echo "Current version: v$(CURRENT_VERSION)"
 	@echo ""
 	@echo "Available commands:"
+	@echo "  make download      - Download and extract the latest release"
 	@echo "  make release       - Create a new release (bumps patch version)"
 	@echo "  make release-minor - Create a new release (bumps minor version)"
 	@echo "  make release-major - Create a new release (bumps major version)"
 	@echo "  make version       - Show current version"
 	@echo "  make next-version  - Show what the next version will be"
+	@echo "  make build         - Build libraries locally"
+	@echo "  make clean         - Clean build directories"
 	@echo ""
 
 .PHONY: version
@@ -122,3 +125,30 @@ clean:
 	@rm -rf build/
 	@rm -rf prebuilt/
 	@echo "✓ Clean complete"
+
+.PHONY: download
+download:
+	@echo "Downloading latest release..."
+	@mkdir -p prebuilt
+	@# Get the latest release download URLs
+	@echo "Fetching release information from GitHub..."
+	@curl -s https://api.github.com/repos/darthdeus/gamelibs/releases/latest | \
+		grep "browser_download_url" | \
+		grep -E "(linux|windows|macos)" | \
+		cut -d '"' -f 4 | \
+		while read url; do \
+			filename=$$(basename $$url); \
+			platform=$$(echo $$filename | sed 's/gamelibs-\(.*\)-x86_64.zip/\1/'); \
+			echo "Downloading $$platform build..."; \
+			curl -L -o prebuilt/$$filename $$url; \
+			echo "Extracting $$platform build..."; \
+			mkdir -p prebuilt/$$platform/x86_64; \
+			unzip -q -o prebuilt/$$filename -d prebuilt/$$platform/x86_64/; \
+			rm prebuilt/$$filename; \
+			echo "✓ $$platform libraries installed"; \
+		done
+	@echo ""
+	@echo "✓ All libraries downloaded and extracted to prebuilt/"
+	@echo ""
+	@echo "Available libraries:"
+	@ls -la prebuilt/*/x86_64/lib/ 2>/dev/null || echo "No libraries found. Make sure the release has been built."
