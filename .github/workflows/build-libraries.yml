@@ -173,7 +173,7 @@ jobs:
     
     - name: Build cimgui (ImGui C wrapper)
       run: |
-        python3 build_imgui_ci.py \
+        python3 build_cimgui_cmake.py \
           $PWD/prebuilt/linux/x86_64 \
           $PWD/prebuilt/linux/x86_64
     
@@ -210,53 +210,254 @@ jobs:
         cd ../../..
         echo "Archive created: $(ls -lh gamelibs-linux-x86_64.zip)"
     
+    
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: gamelibs-linux-x86_64
+        path: gamelibs-linux-x86_64.zip
+        retention-days: 7
+
+  build-windows:
+    runs-on: windows-latest
+    name: Build Windows x86_64
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.x'
+    
+    - name: Generate cache keys
+      id: cache-keys
+      shell: bash
+      run: |
+        # Cache version - increment this to force cache rebuild
+        CACHE_VERSION="v1"
+        
+        # Add manual cache clear suffix if requested
+        if [ "${{ github.event.inputs.clear_cache }}" = "true" ]; then
+          CACHE_SUFFIX="-cleared-$(date +%s)"
+        else
+          CACHE_SUFFIX=""
+        fi
+        
+        # Generate hash of SDL2 source for cache key
+        SDL2_HASH=$(find SDL2-2.32.4 -type f -name '*.c' -o -name '*.h' -o -name 'CMakeLists.txt' | head -100 | xargs sha256sum | sha256sum | cut -d' ' -f1)
+        echo "sdl2-hash=${CACHE_VERSION}-${SDL2_HASH}${CACHE_SUFFIX}" >> $GITHUB_OUTPUT
+        
+        # Generate hash of FreeType source for cache key
+        FT_HASH=$(find freetype-2.14.1 -type f -name '*.c' -o -name '*.h' -o -name 'CMakeLists.txt' | head -100 | xargs sha256sum | sha256sum | cut -d' ' -f1)
+        echo "freetype-hash=${CACHE_VERSION}-${FT_HASH}${CACHE_SUFFIX}" >> $GITHUB_OUTPUT
+    
+    - name: Cache SDL2 build
+      id: cache-sdl2
+      uses: actions/cache@v3
+      with:
+        path: |
+          prebuilt/windows/x86_64/lib/SDL2*
+          prebuilt/windows/x86_64/include/SDL2
+          prebuilt/windows/x86_64/bin/SDL2.dll
+        key: sdl2-windows-${{ steps.cache-keys.outputs.sdl2-hash }}
+    
+    - name: Cache FreeType build
+      id: cache-freetype
+      uses: actions/cache@v3
+      with:
+        path: |
+          prebuilt/windows/x86_64/lib/freetype*
+          prebuilt/windows/x86_64/include/freetype2
+          prebuilt/windows/x86_64/bin/freetype.dll
+        key: freetype-windows-${{ steps.cache-keys.outputs.freetype-hash }}
+    
+    - name: Initialize submodules
+      run: |
+        git submodule update --init --recursive
+    
+    - name: Create build directories
+      shell: bash
+      run: |
+        mkdir -p build/SDL2
+        mkdir -p build/freetype
+        mkdir -p build/cimgui
+        mkdir -p prebuilt/windows/x86_64
+    
+    - name: Build SDL2
+      if: steps.cache-sdl2.outputs.cache-hit != 'true'
+      shell: cmd
+      run: |
+        cd build\SDL2
+        cmake ..\..\SDL2-2.32.4 ^
+          -G "Visual Studio 17 2022" ^
+          -A x64 ^
+          -DCMAKE_BUILD_TYPE=Release ^
+          -DCMAKE_INSTALL_PREFIX=%CD%\..\..\prebuilt\windows\x86_64 ^
+          -DSDL_SHARED=ON ^
+          -DSDL_STATIC=ON
+        cmake --build . --config Release --parallel
+        cmake --install . --config Release
+    
+    - name: SDL2 cache status
+      shell: bash
+      run: |
+        if [ "${{ steps.cache-sdl2.outputs.cache-hit }}" = "true" ]; then
+          echo "✓ SDL2 restored from cache"
+        else
+          echo "✓ SDL2 built from source"
+        fi
+        ls -la prebuilt/windows/x86_64/lib/SDL2* || true
+        ls -la prebuilt/windows/x86_64/bin/SDL2* || true
+    
+    - name: Build FreeType
+      if: steps.cache-freetype.outputs.cache-hit != 'true'
+      shell: cmd
+      run: |
+        cd build\freetype
+        cmake ..\..\freetype-2.14.1 ^
+          -G "Visual Studio 17 2022" ^
+          -A x64 ^
+          -DCMAKE_BUILD_TYPE=Release ^
+          -DCMAKE_INSTALL_PREFIX=%CD%\..\..\prebuilt\windows\x86_64 ^
+          -DBUILD_SHARED_LIBS=ON ^
+          -DFT_DISABLE_HARFBUZZ=ON ^
+          -DFT_DISABLE_BROTLI=ON
+        cmake --build . --config Release --parallel
+        cmake --install . --config Release
+    
+    - name: FreeType cache status
+      shell: bash
+      run: |
+        if [ "${{ steps.cache-freetype.outputs.cache-hit }}" = "true" ]; then
+          echo "✓ FreeType restored from cache"
+        else
+          echo "✓ FreeType built from source"
+        fi
+        ls -la prebuilt/windows/x86_64/lib/freetype* || true
+        ls -la prebuilt/windows/x86_64/bin/freetype* || true
+    
+    - name: Build cimgui (ImGui C wrapper)
+      shell: bash
+      run: |
+        python build_cimgui_cmake.py \
+          $PWD/prebuilt/windows/x86_64 \
+          $PWD/prebuilt/windows/x86_64
+    
+    - name: Create library info file
+      shell: bash
+      run: |
+        cat > prebuilt/windows/x86_64/library_info.txt << EOF
+        Built on: $(date)
+        Platform: Windows x86_64
+        
+        Libraries included:
+        - SDL2 Version: 2.32.4
+        - FreeType Version: 2.14.1
+        - cimgui (Dear ImGui C wrapper) with SDL2/OpenGL3 backends
+        
+        Libraries:
+        $(ls -la prebuilt/windows/x86_64/lib/)
+        
+        Binaries (DLLs):
+        $(ls -la prebuilt/windows/x86_64/bin/)
+        
+        Headers:
+        $(ls -la prebuilt/windows/x86_64/include/)
+        EOF
+    
+    - name: List built files
+      shell: bash
+      run: |
+        echo "=== Built libraries ==="
+        find prebuilt/windows/x86_64 -type f -name "*.lib" -o -name "*.dll" | sort
+        echo ""
+        echo "=== Header files ==="
+        find prebuilt/windows/x86_64/include -type f -name "*.h" | head -20
+    
+    - name: Create release archive
+      shell: bash
+      run: |
+        cd prebuilt/windows/x86_64
+        7z a -tzip ../../../gamelibs-windows-x86_64.zip *
+        cd ../../..
+        echo "Archive created: $(ls -lh gamelibs-windows-x86_64.zip)"
+    
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: gamelibs-windows-x86_64
+        path: gamelibs-windows-x86_64.zip
+        retention-days: 7
+
+  create-release:
+    needs: [build-ubuntu, build-windows]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    name: Create Release
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Download Linux artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: gamelibs-linux-x86_64
+    
+    - name: Download Windows artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: gamelibs-windows-x86_64
+    
     - name: Generate release notes
-      if: startsWith(github.ref, 'refs/tags/')
       run: |
         cat > release_notes.md << EOF
-        ## Game Libraries Build
+        ## Game Libraries Build ${{ github.ref_name }}
         
         **Date:** $(date -u +"%Y-%m-%d %H:%M UTC")
-        **Platform:** Ubuntu Linux x86_64
         
         ### Included Libraries
         - **SDL2** v2.32.4 - Cross-platform multimedia library
         - **FreeType** v2.14.1 - Font rendering library
         - **cimgui** - Dear ImGui C wrapper with SDL2/OpenGL3 backends
         
-        ### Build Configuration
-        - SDL2: ALSA, PulseAudio, X11, Wayland, OpenGL, OpenGLES, Vulkan support
-        - FreeType: PNG/zlib support, shared libraries
+        ### Platform Builds
+        - **Linux x86_64** (\`gamelibs-linux-x86_64.zip\`)
+          - SDL2: ALSA, PulseAudio, X11, Wayland, OpenGL, OpenGLES, Vulkan support
+          - Shared libraries (.so) and static libraries (.a)
+        
+        - **Windows x86_64** (\`gamelibs-windows-x86_64.zip\`)
+          - SDL2: DirectX, OpenGL, Vulkan support
+          - Dynamic libraries (.dll) and import libraries (.lib)
         
         ### Installation
-        Extract the archive to your preferred location. The structure includes:
-        - \`lib/\` - Compiled libraries (.so, .a files)
-        - \`include/\` - Header files
-        - \`bin/\` - Any executables (if applicable)
-        - \`lib/pkgconfig/\` - pkg-config files
+        1. Download the archive for your platform
+        2. Extract to your preferred location
+        3. The structure includes:
+           - \`lib/\` - Compiled libraries
+           - \`bin/\` - Runtime binaries (Windows: DLLs)
+           - \`include/\` - Header files
+           - \`lib/pkgconfig/\` - pkg-config files (Linux)
         
         ### Usage
         Set your build system to use:
         - Include path: \`<extracted_path>/include\`
         - Library path: \`<extracted_path>/lib\`
+        - Runtime path (Windows): \`<extracted_path>/bin\`
+        
+        ### Building from Source
+        See the [GitHub repository](https://github.com/${{ github.repository }}) for build instructions.
         EOF
     
-    - name: Create Release
-      if: startsWith(github.ref, 'refs/tags/')
+    - name: Create GitHub Release
       uses: softprops/action-gh-release@v1
       with:
         name: Game Libraries ${{ github.ref_name }}
         body_path: release_notes.md
-        files: gamelibs-linux-x86_64.zip
+        files: |
+          gamelibs-linux-x86_64.zip
+          gamelibs-windows-x86_64.zip
         draft: false
         prerelease: false
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-    
-    - name: Upload artifact (non-release builds)
-      if: "!startsWith(github.ref, 'refs/tags/')"
-      uses: actions/upload-artifact@v4
-      with:
-        name: gamelibs-linux-x86_64
-        path: gamelibs-linux-x86_64.zip
-        retention-days: 7

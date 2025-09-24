@@ -47,10 +47,8 @@ def build_cimgui(sdl_prefix, install_prefix):
     # Platform-specific settings
     if IS_WINDOWS:
         lib_name = "cimgui.dll"
-        cc = "cl"
-        cxx = "cl"
-        extra_cflags = []
-        extra_ldflags = ["/LINK", "SDL2.lib", "opengl32.lib"]
+        # Use cmake to handle MSVC properly
+        use_cmake = True
     elif IS_MACOS:
         lib_name = "libcimgui.dylib"
         cc = "clang"
