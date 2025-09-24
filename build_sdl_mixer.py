@@ -100,10 +100,7 @@ def build_libogg(build_dir, install_dir, platform_name):
     if platform_name == "windows":
         cmake_args.extend(["-G", "Visual Studio 17 2022", "-A", "x64"])
     elif platform_name == "macos":
-        cmake_args.extend([
-            "-DCMAKE_OSX_ARCHITECTURES=x86_64",
-            "-DCMAKE_OSX_DEPLOYMENT_TARGET=10.12"
-        ])
+        cmake_args.append("-DCMAKE_OSX_ARCHITECTURES=arm64")
     
     run_command(cmake_args, cwd=build_path)
     run_command(["cmake", "--build", ".", "--config", "Release"], cwd=build_path)
@@ -139,10 +136,7 @@ def build_libvorbis(build_dir, install_dir, platform_name):
     if platform_name == "windows":
         cmake_args.extend(["-G", "Visual Studio 17 2022", "-A", "x64"])
     elif platform_name == "macos":
-        cmake_args.extend([
-            "-DCMAKE_OSX_ARCHITECTURES=x86_64",
-            "-DCMAKE_OSX_DEPLOYMENT_TARGET=10.12"
-        ])
+        cmake_args.append("-DCMAKE_OSX_ARCHITECTURES=arm64")
     
     run_command(cmake_args, cwd=build_path)
     run_command(["cmake", "--build", ".", "--config", "Release"], cwd=build_path)
@@ -184,10 +178,7 @@ def build_flac(build_dir, install_dir, platform_name):
     if platform_name == "windows":
         cmake_args.extend(["-G", "Visual Studio 17 2022", "-A", "x64"])
     elif platform_name == "macos":
-        cmake_args.extend([
-            "-DCMAKE_OSX_ARCHITECTURES=x86_64",
-            "-DCMAKE_OSX_DEPLOYMENT_TARGET=10.12"
-        ])
+        cmake_args.append("-DCMAKE_OSX_ARCHITECTURES=arm64")
     
     env = os.environ.copy()
     env["PKG_CONFIG_PATH"] = f"{install_dir.resolve()}/lib/pkgconfig"
@@ -244,7 +235,7 @@ def build_mpg123(build_dir, install_dir, platform_name):
         ]
         
         if platform_name == "macos":
-            configure_args.append("--host=x86_64-apple-darwin")
+            configure_args.append("--host=aarch64-apple-darwin")
         
         run_command(configure_args, cwd=mpg123_src)
         run_command(["make", f"-j{os.cpu_count()}"], cwd=mpg123_src)
@@ -270,7 +261,10 @@ def build_sdl_mixer(build_dir, install_dir, platform_name):
     shutil.copytree(vendored_src, sdl_mixer_src)
     
     # Find SDL2
-    sdl2_dir = Path.cwd() / "prebuilt" / platform_name / "x86_64"
+    if platform_name == "macos":
+        sdl2_dir = Path.cwd() / "prebuilt" / platform_name / "arm64"
+    else:
+        sdl2_dir = Path.cwd() / "prebuilt" / platform_name / "x86_64"
     if not sdl2_dir.exists():
         print(f"Error: SDL2 not found at {sdl2_dir}")
         print("Please build SDL2 first using build_sdl2.py")
@@ -330,6 +324,8 @@ def build_sdl_mixer(build_dir, install_dir, platform_name):
     
     if platform_name == "windows":
         cmake_args.extend(["-G", "Visual Studio 17 2022", "-A", "x64"])
+    elif platform_name == "macos":
+        cmake_args.append("-DCMAKE_OSX_ARCHITECTURES=arm64")
         # Windows static lib names are different - update library paths
         for i, arg in enumerate(cmake_args):
             if arg.startswith("-DOGG_LIBRARY="):
@@ -344,8 +340,8 @@ def build_sdl_mixer(build_dir, install_dir, platform_name):
                 cmake_args[i] = f"-DMPG123_LIBRARY={install_dir}/lib/mpg123.lib"
     elif platform_name == "macos":
         cmake_args.extend([
-            "-DCMAKE_OSX_ARCHITECTURES=x86_64",
-            "-DCMAKE_OSX_DEPLOYMENT_TARGET=10.12"
+            "-DCMAKE_OSX_ARCHITECTURES=arm64",
+            "-DCMAKE_OSX_DEPLOYMENT_TARGET=11.0"
         ])
     
     env = os.environ.copy()
@@ -363,7 +359,10 @@ def main():
     
     # Setup directories with absolute paths
     build_dir = Path.cwd() / "build" / "sdl_mixer"
-    install_dir = Path.cwd() / "prebuilt" / platform_name / "x86_64"
+    if platform_name == "macos":
+        install_dir = Path.cwd() / "prebuilt" / platform_name / "arm64"
+    else:
+        install_dir = Path.cwd() / "prebuilt" / platform_name / "x86_64"
     
     build_dir.mkdir(parents=True, exist_ok=True)
     install_dir.mkdir(parents=True, exist_ok=True)

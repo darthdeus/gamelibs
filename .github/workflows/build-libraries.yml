@@ -21,7 +21,7 @@ permissions:
 jobs:
   build-ubuntu:
     runs-on: ubuntu-latest
-    name: Build Ubuntu x86_64
+    name: Build Ubuntu arm64
     
     steps:
     - uses: actions/checkout@v4
@@ -60,10 +60,10 @@ jobs:
       uses: actions/cache@v3
       with:
         path: |
-          prebuilt/linux/x86_64/lib/libSDL2*
-          prebuilt/linux/x86_64/include/SDL2
-          prebuilt/linux/x86_64/lib/pkgconfig/sdl2.pc
-          prebuilt/linux/x86_64/bin/sdl2-config
+          prebuilt/linux/arm64/lib/libSDL2*
+          prebuilt/linux/arm64/include/SDL2
+          prebuilt/linux/arm64/lib/pkgconfig/sdl2.pc
+          prebuilt/linux/arm64/bin/sdl2-config
         key: sdl2-ubuntu-${{ steps.cache-keys.outputs.sdl2-hash }}
     
     - name: Cache FreeType build
@@ -71,9 +71,9 @@ jobs:
       uses: actions/cache@v3
       with:
         path: |
-          prebuilt/linux/x86_64/lib/libfreetype*
-          prebuilt/linux/x86_64/include/freetype2
-          prebuilt/linux/x86_64/lib/pkgconfig/freetype2.pc
+          prebuilt/linux/arm64/lib/libfreetype*
+          prebuilt/linux/arm64/include/freetype2
+          prebuilt/linux/arm64/lib/pkgconfig/freetype2.pc
         key: freetype-ubuntu-${{ steps.cache-keys.outputs.freetype-hash }}
     
     - name: Install build dependencies
@@ -126,7 +126,7 @@ jobs:
         mkdir -p build/freetype
         mkdir -p build/cimgui
         mkdir -p build/luajit
-        mkdir -p prebuilt/linux/x86_64
+        mkdir -p prebuilt/linux/arm64
     
     - name: Build SDL2
       if: steps.cache-sdl2.outputs.cache-hit != 'true'
@@ -135,7 +135,7 @@ jobs:
         cmake ../../SDL2-2.32.4 \
           -GNinja \
           -DCMAKE_BUILD_TYPE=Release \
-          -DCMAKE_INSTALL_PREFIX=$PWD/../../prebuilt/linux/x86_64 \
+          -DCMAKE_INSTALL_PREFIX=$PWD/../../prebuilt/linux/arm64 \
           -DSDL_SHARED=ON \
           -DSDL_STATIC=ON \
           -DSDL_ALSA=ON \
@@ -155,7 +155,7 @@ jobs:
         else
           echo "✓ SDL2 built from source"
         fi
-        ls -la prebuilt/linux/x86_64/lib/libSDL2* || true
+        ls -la prebuilt/linux/arm64/lib/libSDL2* || true
     
     - name: Build FreeType
       if: steps.cache-freetype.outputs.cache-hit != 'true'
@@ -164,7 +164,7 @@ jobs:
         cmake ../../freetype-2.14.1 \
           -GNinja \
           -DCMAKE_BUILD_TYPE=Release \
-          -DCMAKE_INSTALL_PREFIX=$PWD/../../prebuilt/linux/x86_64 \
+          -DCMAKE_INSTALL_PREFIX=$PWD/../../prebuilt/linux/arm64 \
           -DBUILD_SHARED_LIBS=ON \
           -DFT_DISABLE_HARFBUZZ=ON \
           -DFT_DISABLE_BROTLI=ON \
@@ -183,24 +183,24 @@ jobs:
         else
           echo "✓ FreeType built from source"
         fi
-        ls -la prebuilt/linux/x86_64/lib/libfreetype* || true
+        ls -la prebuilt/linux/arm64/lib/libfreetype* || true
     
     - name: Cache cimgui
       id: cache-cimgui
       uses: actions/cache@v4
       with:
         path: |
-          prebuilt/linux/x86_64/lib/cimgui_complete.so
-          prebuilt/linux/x86_64/include/cimgui*
-          prebuilt/linux/x86_64/include/imgui_impl_*
+          prebuilt/linux/arm64/lib/cimgui_complete.so
+          prebuilt/linux/arm64/include/cimgui*
+          prebuilt/linux/arm64/include/imgui_impl_*
         key: cimgui-ubuntu-${{ steps.cache-keys.outputs.cimgui-hash }}
     
     - name: Build cimgui (ImGui C wrapper)
       if: steps.cache-cimgui.outputs.cache-hit != 'true'
       run: |
         python3 build_imgui.py \
-          $PWD/prebuilt/linux/x86_64 \
-          $PWD/prebuilt/linux/x86_64
+          $PWD/prebuilt/linux/arm64 \
+          $PWD/prebuilt/linux/arm64
     
     - name: cimgui cache status
       run: |
@@ -209,25 +209,25 @@ jobs:
         else
           echo "✓ cimgui built from source"
         fi
-        ls -la prebuilt/linux/x86_64/lib/cimgui* || true
+        ls -la prebuilt/linux/arm64/lib/cimgui* || true
     
     - name: Cache LuaJIT
       id: cache-luajit
       uses: actions/cache@v4
       with:
         path: |
-          prebuilt/linux/x86_64/lib/libluajit*
-          prebuilt/linux/x86_64/include/luajit-2.1
-          prebuilt/linux/x86_64/share/luajit*
-          prebuilt/linux/x86_64/bin/luajit*
+          prebuilt/linux/arm64/lib/libluajit*
+          prebuilt/linux/arm64/include/luajit-2.1
+          prebuilt/linux/arm64/share/luajit*
+          prebuilt/linux/arm64/bin/luajit*
         key: luajit-ubuntu-${{ steps.cache-keys.outputs.luajit-hash }}
     
     - name: Build LuaJIT
       if: steps.cache-luajit.outputs.cache-hit != 'true'
       run: |
         cd luajit
-        make -j$(nproc) PREFIX=$PWD/../prebuilt/linux/x86_64
-        make install PREFIX=$PWD/../prebuilt/linux/x86_64
+        make -j$(nproc) PREFIX=$PWD/../prebuilt/linux/arm64
+        make install PREFIX=$PWD/../prebuilt/linux/arm64
         cd ..
         echo "✓ LuaJIT built and installed"
     
@@ -238,7 +238,7 @@ jobs:
         else
           echo "✓ LuaJIT built from source"
         fi
-        ls -la prebuilt/linux/x86_64/lib/libluajit* || true
+        ls -la prebuilt/linux/arm64/lib/libluajit* || true
     
     - name: Build SDL_image
       run: |
@@ -252,7 +252,7 @@ jobs:
     
     - name: Create library info file
       run: |
-        cat > prebuilt/linux/x86_64/library_info.txt << EOF
+        cat > prebuilt/linux/arm64/library_info.txt << EOF
         Built on: $(date)
         Platform: Ubuntu $(lsb_release -rs)
         
@@ -265,38 +265,38 @@ jobs:
         - SDL_mixer 2.8.0 - Audio mixing (WAV, OGG, FLAC, MP3 support)
         
         Libraries:
-        $(ls -la prebuilt/linux/x86_64/lib/)
+        $(ls -la prebuilt/linux/arm64/lib/)
         
         Headers:
-        $(ls -la prebuilt/linux/x86_64/include/)
+        $(ls -la prebuilt/linux/arm64/include/)
         EOF
     
     - name: List built files
       run: |
         echo "=== Built libraries ==="
-        find prebuilt/linux/x86_64 -type f -name "*.so*" -o -name "*.a" | sort
+        find prebuilt/linux/arm64 -type f -name "*.so*" -o -name "*.a" | sort
         echo ""
         echo "=== Header files ==="
-        find prebuilt/linux/x86_64/include -type f -name "*.h" | head -20
+        find prebuilt/linux/arm64/include -type f -name "*.h" | head -20
     
     - name: Create release archive
       run: |
-        cd prebuilt/linux/x86_64
-        zip -r ../../../gamelibs-linux-x86_64.zip .
+        cd prebuilt/linux/arm64
+        zip -r ../../../gamelibs-linux-arm64.zip .
         cd ../../..
-        echo "Archive created: $(ls -lh gamelibs-linux-x86_64.zip)"
+        echo "Archive created: $(ls -lh gamelibs-linux-arm64.zip)"
     
     
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
-        name: gamelibs-linux-x86_64
-        path: gamelibs-linux-x86_64.zip
+        name: gamelibs-linux-arm64
+        path: gamelibs-linux-arm64.zip
         retention-days: 7
 
   build-windows:
     runs-on: windows-latest
-    name: Build Windows x86_64
+    name: Build Windows arm64
     
     steps:
     - uses: actions/checkout@v4
@@ -341,9 +341,9 @@ jobs:
       uses: actions/cache@v3
       with:
         path: |
-          prebuilt/windows/x86_64/lib/SDL2*
-          prebuilt/windows/x86_64/include/SDL2
-          prebuilt/windows/x86_64/bin/SDL2.dll
+          prebuilt/windows/arm64/lib/SDL2*
+          prebuilt/windows/arm64/include/SDL2
+          prebuilt/windows/arm64/bin/SDL2.dll
         key: sdl2-windows-${{ steps.cache-keys.outputs.sdl2-hash }}
     
     - name: Cache FreeType build
@@ -351,9 +351,9 @@ jobs:
       uses: actions/cache@v3
       with:
         path: |
-          prebuilt/windows/x86_64/lib/freetype*
-          prebuilt/windows/x86_64/include/freetype2
-          prebuilt/windows/x86_64/bin/freetype.dll
+          prebuilt/windows/arm64/lib/freetype*
+          prebuilt/windows/arm64/include/freetype2
+          prebuilt/windows/arm64/bin/freetype.dll
         key: freetype-windows-${{ steps.cache-keys.outputs.freetype-hash }}
     
     - name: Initialize submodules
@@ -367,7 +367,7 @@ jobs:
         mkdir -p build/freetype
         mkdir -p build/cimgui
         mkdir -p build/luajit
-        mkdir -p prebuilt/windows/x86_64
+        mkdir -p prebuilt/windows/arm64
     
     - name: Build SDL2
       if: steps.cache-sdl2.outputs.cache-hit != 'true'
@@ -378,7 +378,7 @@ jobs:
           -G "Visual Studio 17 2022" ^
           -A x64 ^
           -DCMAKE_BUILD_TYPE=Release ^
-          -DCMAKE_INSTALL_PREFIX=%CD%\..\..\prebuilt\windows\x86_64 ^
+          -DCMAKE_INSTALL_PREFIX=%CD%\..\..\prebuilt\windows\arm64 ^
           -DSDL_SHARED=ON ^
           -DSDL_STATIC=ON
         cmake --build . --config Release --parallel
@@ -392,8 +392,8 @@ jobs:
         else
           echo "✓ SDL2 built from source"
         fi
-        ls -la prebuilt/windows/x86_64/lib/SDL2* || true
-        ls -la prebuilt/windows/x86_64/bin/SDL2* || true
+        ls -la prebuilt/windows/arm64/lib/SDL2* || true
+        ls -la prebuilt/windows/arm64/bin/SDL2* || true
     
     - name: Build FreeType
       if: steps.cache-freetype.outputs.cache-hit != 'true'
@@ -404,7 +404,7 @@ jobs:
           -G "Visual Studio 17 2022" ^
           -A x64 ^
           -DCMAKE_BUILD_TYPE=Release ^
-          -DCMAKE_INSTALL_PREFIX=%CD%\..\..\prebuilt\windows\x86_64 ^
+          -DCMAKE_INSTALL_PREFIX=%CD%\..\..\prebuilt\windows\arm64 ^
           -DBUILD_SHARED_LIBS=ON ^
           -DFT_DISABLE_HARFBUZZ=ON ^
           -DFT_DISABLE_BROTLI=ON ^
@@ -424,18 +424,18 @@ jobs:
         else
           echo "✓ FreeType built from source"
         fi
-        ls -la prebuilt/windows/x86_64/lib/freetype* || true
-        ls -la prebuilt/windows/x86_64/bin/freetype* || true
+        ls -la prebuilt/windows/arm64/lib/freetype* || true
+        ls -la prebuilt/windows/arm64/bin/freetype* || true
     
     - name: Cache cimgui
       id: cache-cimgui
       uses: actions/cache@v3
       with:
         path: |
-          prebuilt/windows/x86_64/lib/cimgui*
-          prebuilt/windows/x86_64/bin/cimgui*
-          prebuilt/windows/x86_64/include/cimgui*
-          prebuilt/windows/x86_64/include/imgui_impl_*
+          prebuilt/windows/arm64/lib/cimgui*
+          prebuilt/windows/arm64/bin/cimgui*
+          prebuilt/windows/arm64/include/cimgui*
+          prebuilt/windows/arm64/include/imgui_impl_*
         key: cimgui-windows-${{ steps.cache-keys.outputs.cimgui-hash }}
     
     - name: Setup MSVC
@@ -446,8 +446,8 @@ jobs:
       shell: cmd
       run: |
         python build_imgui.py ^
-          %cd%\prebuilt\windows\x86_64 ^
-          %cd%\prebuilt\windows\x86_64
+          %cd%\prebuilt\windows\arm64 ^
+          %cd%\prebuilt\windows\arm64
     
     - name: cimgui cache status
       shell: bash
@@ -457,18 +457,18 @@ jobs:
         else
           echo "✓ cimgui built from source"
         fi
-        ls -la prebuilt/windows/x86_64/lib/cimgui* || true
-        ls -la prebuilt/windows/x86_64/bin/cimgui* || true
+        ls -la prebuilt/windows/arm64/lib/cimgui* || true
+        ls -la prebuilt/windows/arm64/bin/cimgui* || true
     
     - name: Cache LuaJIT
       id: cache-luajit
       uses: actions/cache@v3
       with:
         path: |
-          prebuilt/windows/x86_64/lib/lua51*
-          prebuilt/windows/x86_64/bin/lua51*
-          prebuilt/windows/x86_64/bin/luajit*
-          prebuilt/windows/x86_64/include/lua*
+          prebuilt/windows/arm64/lib/lua51*
+          prebuilt/windows/arm64/bin/lua51*
+          prebuilt/windows/arm64/bin/luajit*
+          prebuilt/windows/arm64/include/lua*
         key: luajit-windows-${{ steps.cache-keys.outputs.luajit-hash }}
     
     - name: Build LuaJIT (Windows)
@@ -477,15 +477,15 @@ jobs:
       run: |
         cd luajit\src
         call msvcbuild.bat
-        xcopy luajit.exe ..\..\prebuilt\windows\x86_64\bin\ /Y
-        xcopy lua51.dll ..\..\prebuilt\windows\x86_64\bin\ /Y
-        xcopy lua51.lib ..\..\prebuilt\windows\x86_64\lib\ /Y
-        xcopy luajit.h ..\..\prebuilt\windows\x86_64\include\ /Y
-        xcopy lua.h ..\..\prebuilt\windows\x86_64\include\ /Y
-        xcopy lauxlib.h ..\..\prebuilt\windows\x86_64\include\ /Y
-        xcopy lualib.h ..\..\prebuilt\windows\x86_64\include\ /Y
-        xcopy luaconf.h ..\..\prebuilt\windows\x86_64\include\ /Y
-        xcopy lua.hpp ..\..\prebuilt\windows\x86_64\include\ /Y
+        xcopy luajit.exe ..\..\prebuilt\windows\arm64\bin\ /Y
+        xcopy lua51.dll ..\..\prebuilt\windows\arm64\bin\ /Y
+        xcopy lua51.lib ..\..\prebuilt\windows\arm64\lib\ /Y
+        xcopy luajit.h ..\..\prebuilt\windows\arm64\include\ /Y
+        xcopy lua.h ..\..\prebuilt\windows\arm64\include\ /Y
+        xcopy lauxlib.h ..\..\prebuilt\windows\arm64\include\ /Y
+        xcopy lualib.h ..\..\prebuilt\windows\arm64\include\ /Y
+        xcopy luaconf.h ..\..\prebuilt\windows\arm64\include\ /Y
+        xcopy lua.hpp ..\..\prebuilt\windows\arm64\include\ /Y
         cd ..\..
         echo LuaJIT built and installed
     
@@ -497,8 +497,8 @@ jobs:
         else
           echo "✓ LuaJIT built from source"
         fi
-        ls -la prebuilt/windows/x86_64/lib/lua51* || true
-        ls -la prebuilt/windows/x86_64/bin/lua* || true
+        ls -la prebuilt/windows/arm64/lib/lua51* || true
+        ls -la prebuilt/windows/arm64/bin/lua* || true
     
     - name: Build SDL_image
       shell: bash
@@ -515,9 +515,9 @@ jobs:
     - name: Create library info file
       shell: bash
       run: |
-        cat > prebuilt/windows/x86_64/library_info.txt << EOF
+        cat > prebuilt/windows/arm64/library_info.txt << EOF
         Built on: $(date)
-        Platform: Windows x86_64
+        Platform: Windows arm64
         
         Libraries included:
         - SDL2 Version: 2.32.4
@@ -528,42 +528,42 @@ jobs:
         - SDL_mixer 2.8.0 - Audio mixing (WAV, OGG, FLAC, MP3 support)
         
         Libraries:
-        $(ls -la prebuilt/windows/x86_64/lib/)
+        $(ls -la prebuilt/windows/arm64/lib/)
         
         Binaries (DLLs):
-        $(ls -la prebuilt/windows/x86_64/bin/)
+        $(ls -la prebuilt/windows/arm64/bin/)
         
         Headers:
-        $(ls -la prebuilt/windows/x86_64/include/)
+        $(ls -la prebuilt/windows/arm64/include/)
         EOF
     
     - name: List built files
       shell: bash
       run: |
         echo "=== Built libraries ==="
-        find prebuilt/windows/x86_64 -type f -name "*.lib" -o -name "*.dll" | sort
+        find prebuilt/windows/arm64 -type f -name "*.lib" -o -name "*.dll" | sort
         echo ""
         echo "=== Header files ==="
-        find prebuilt/windows/x86_64/include -type f -name "*.h" | head -20
+        find prebuilt/windows/arm64/include -type f -name "*.h" | head -20
     
     - name: Create release archive
       shell: bash
       run: |
-        cd prebuilt/windows/x86_64
-        7z a -tzip ../../../gamelibs-windows-x86_64.zip *
+        cd prebuilt/windows/arm64
+        7z a -tzip ../../../gamelibs-windows-arm64.zip *
         cd ../../..
-        echo "Archive created: $(ls -lh gamelibs-windows-x86_64.zip)"
+        echo "Archive created: $(ls -lh gamelibs-windows-arm64.zip)"
     
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
-        name: gamelibs-windows-x86_64
-        path: gamelibs-windows-x86_64.zip
+        name: gamelibs-windows-arm64
+        path: gamelibs-windows-arm64.zip
         retention-days: 7
 
   build-macos:
     runs-on: macos-latest
-    name: Build macOS x86_64
+    name: Build macOS ARM64
     
     steps:
     - uses: actions/checkout@v4
@@ -610,7 +610,7 @@ jobs:
     - name: Create build directories
       run: |
         mkdir -p build/{sdl2,freetype}
-        mkdir -p prebuilt/macos/x86_64/{lib,bin,include}
+        mkdir -p prebuilt/macos/arm64/{lib,bin,include}
     
     # Cache SDL2 build
     - name: Cache SDL2
@@ -618,8 +618,8 @@ jobs:
       uses: actions/cache@v4
       with:
         path: |
-          prebuilt/macos/x86_64/lib/libSDL2*
-          prebuilt/macos/x86_64/include/SDL2
+          prebuilt/macos/arm64/lib/libSDL2*
+          prebuilt/macos/arm64/include/SDL2
         key: macos-sdl2-${{ steps.cache-keys.outputs.sdl2-hash }}
     
     - name: Build SDL2
@@ -629,7 +629,8 @@ jobs:
         cmake ../../SDL2-2.32.4 \
           -GNinja \
           -DCMAKE_BUILD_TYPE=Release \
-          -DCMAKE_INSTALL_PREFIX=$PWD/../../prebuilt/macos/x86_64 \
+          -DCMAKE_INSTALL_PREFIX=$PWD/../../prebuilt/macos/arm64 \
+          -DCMAKE_OSX_ARCHITECTURES=arm64 \
           -DSDL_SHARED=ON \
           -DSDL_STATIC=ON
         ninja -j$(sysctl -n hw.ncpu)
@@ -642,7 +643,7 @@ jobs:
         else
           echo "✓ SDL2 built from source"
         fi
-        ls -la prebuilt/macos/x86_64/lib/libSDL2* || true
+        ls -la prebuilt/macos/arm64/lib/libSDL2* || true
     
     # Cache FreeType build
     - name: Cache FreeType
@@ -650,8 +651,8 @@ jobs:
       uses: actions/cache@v4
       with:
         path: |
-          prebuilt/macos/x86_64/lib/libfreetype*
-          prebuilt/macos/x86_64/include/freetype2
+          prebuilt/macos/arm64/lib/libfreetype*
+          prebuilt/macos/arm64/include/freetype2
         key: macos-freetype-${{ steps.cache-keys.outputs.freetype-hash }}
     
     - name: Build FreeType
@@ -661,7 +662,8 @@ jobs:
         cmake ../../freetype-2.14.1 \
           -GNinja \
           -DCMAKE_BUILD_TYPE=Release \
-          -DCMAKE_INSTALL_PREFIX=$PWD/../../prebuilt/macos/x86_64 \
+          -DCMAKE_INSTALL_PREFIX=$PWD/../../prebuilt/macos/arm64 \
+          -DCMAKE_OSX_ARCHITECTURES=arm64 \
           -DBUILD_SHARED_LIBS=ON \
           -DFT_DISABLE_HARFBUZZ=ON \
           -DFT_DISABLE_BROTLI=ON \
@@ -680,24 +682,24 @@ jobs:
         else
           echo "✓ FreeType built from source"
         fi
-        ls -la prebuilt/macos/x86_64/lib/libfreetype* || true
+        ls -la prebuilt/macos/arm64/lib/libfreetype* || true
     
     - name: Cache cimgui
       id: cache-cimgui
       uses: actions/cache@v4
       with:
         path: |
-          prebuilt/macos/x86_64/lib/cimgui*
-          prebuilt/macos/x86_64/include/cimgui*
-          prebuilt/macos/x86_64/include/imgui_impl_*
+          prebuilt/macos/arm64/lib/cimgui*
+          prebuilt/macos/arm64/include/cimgui*
+          prebuilt/macos/arm64/include/imgui_impl_*
         key: cimgui-macos-${{ steps.cache-keys.outputs.cimgui-hash }}
     
     - name: Build cimgui (ImGui C wrapper)
       if: steps.cache-cimgui.outputs.cache-hit != 'true'
       run: |
         python3 build_imgui.py \
-          $PWD/prebuilt/macos/x86_64 \
-          $PWD/prebuilt/macos/x86_64
+          $PWD/prebuilt/macos/arm64 \
+          $PWD/prebuilt/macos/arm64
     
     - name: cimgui cache status
       run: |
@@ -706,25 +708,25 @@ jobs:
         else
           echo "✓ cimgui built from source"
         fi
-        ls -la prebuilt/macos/x86_64/lib/cimgui* || true
+        ls -la prebuilt/macos/arm64/lib/cimgui* || true
     
     - name: Cache LuaJIT
       id: cache-luajit
       uses: actions/cache@v4
       with:
         path: |
-          prebuilt/macos/x86_64/lib/libluajit*
-          prebuilt/macos/x86_64/include/luajit-2.1
-          prebuilt/macos/x86_64/share/luajit*
-          prebuilt/macos/x86_64/bin/luajit*
+          prebuilt/macos/arm64/lib/libluajit*
+          prebuilt/macos/arm64/include/luajit-2.1
+          prebuilt/macos/arm64/share/luajit*
+          prebuilt/macos/arm64/bin/luajit*
         key: luajit-macos-${{ steps.cache-keys.outputs.luajit-hash }}
     
     - name: Build LuaJIT
       if: steps.cache-luajit.outputs.cache-hit != 'true'
       run: |
         cd luajit
-        make -j$(sysctl -n hw.ncpu) PREFIX=$PWD/../prebuilt/macos/x86_64 MACOSX_DEPLOYMENT_TARGET=10.12
-        make install PREFIX=$PWD/../prebuilt/macos/x86_64
+        make -j$(sysctl -n hw.ncpu) PREFIX=$PWD/../prebuilt/macos/arm64 MACOSX_DEPLOYMENT_TARGET=11.0 TARGET_FLAGS="-arch arm64"
+        make install PREFIX=$PWD/../prebuilt/macos/arm64
         cd ..
         echo "✓ LuaJIT built and installed"
     
@@ -735,7 +737,7 @@ jobs:
         else
           echo "✓ LuaJIT built from source"
         fi
-        ls -la prebuilt/macos/x86_64/lib/libluajit* || true
+        ls -la prebuilt/macos/arm64/lib/libluajit* || true
     
     - name: Build SDL_image
       run: |
@@ -749,10 +751,10 @@ jobs:
     
     - name: Create library info file
       run: |
-        cat > prebuilt/macos/x86_64/library_info.txt << EOF
+        cat > prebuilt/macos/arm64/library_info.txt << EOF
         Built on: $(date)
         Platform: macOS $(sw_vers -productVersion)
-        Architecture: x86_64
+        Architecture: arm64
         
         Libraries included:
         - SDL2 Version: 2.32.4
@@ -764,39 +766,39 @@ jobs:
         
         Library files:
         EOF
-        echo "" >> prebuilt/macos/x86_64/library_info.txt
-        echo "=== SDL2 ===" >> prebuilt/macos/x86_64/library_info.txt
-        ls -la prebuilt/macos/x86_64/lib/libSDL2* >> prebuilt/macos/x86_64/library_info.txt
-        echo "" >> prebuilt/macos/x86_64/library_info.txt
-        echo "=== FreeType ===" >> prebuilt/macos/x86_64/library_info.txt
-        ls -la prebuilt/macos/x86_64/lib/libfreetype* >> prebuilt/macos/x86_64/library_info.txt
-        echo "" >> prebuilt/macos/x86_64/library_info.txt
-        echo "=== cimgui ===" >> prebuilt/macos/x86_64/library_info.txt
-        ls -la prebuilt/macos/x86_64/lib/cimgui* >> prebuilt/macos/x86_64/library_info.txt
-        echo "" >> prebuilt/macos/x86_64/library_info.txt
-        echo "=== LuaJIT ===" >> prebuilt/macos/x86_64/library_info.txt
-        ls -la prebuilt/macos/x86_64/lib/libluajit* >> prebuilt/macos/x86_64/library_info.txt
+        echo "" >> prebuilt/macos/arm64/library_info.txt
+        echo "=== SDL2 ===" >> prebuilt/macos/arm64/library_info.txt
+        ls -la prebuilt/macos/arm64/lib/libSDL2* >> prebuilt/macos/arm64/library_info.txt
+        echo "" >> prebuilt/macos/arm64/library_info.txt
+        echo "=== FreeType ===" >> prebuilt/macos/arm64/library_info.txt
+        ls -la prebuilt/macos/arm64/lib/libfreetype* >> prebuilt/macos/arm64/library_info.txt
+        echo "" >> prebuilt/macos/arm64/library_info.txt
+        echo "=== cimgui ===" >> prebuilt/macos/arm64/library_info.txt
+        ls -la prebuilt/macos/arm64/lib/cimgui* >> prebuilt/macos/arm64/library_info.txt
+        echo "" >> prebuilt/macos/arm64/library_info.txt
+        echo "=== LuaJIT ===" >> prebuilt/macos/arm64/library_info.txt
+        ls -la prebuilt/macos/arm64/lib/libluajit* >> prebuilt/macos/arm64/library_info.txt
     
     - name: List built libraries
       run: |
         echo "=== All library files ==="
-        find prebuilt/macos/x86_64/lib -type f \( -name "*.dylib" -o -name "*.a" \) | sort
+        find prebuilt/macos/arm64/lib -type f \( -name "*.dylib" -o -name "*.a" \) | sort
         echo ""
         echo "=== Header files ==="
-        find prebuilt/macos/x86_64/include -type f -name "*.h" | head -20
+        find prebuilt/macos/arm64/include -type f -name "*.h" | head -20
     
     - name: Create release archive
       run: |
-        cd prebuilt/macos/x86_64
-        zip -r ../../../gamelibs-macos-x86_64.zip *
+        cd prebuilt/macos/arm64
+        zip -r ../../../gamelibs-macos-arm64.zip *
         cd ../../..
-        echo "Archive created: $(ls -lh gamelibs-macos-x86_64.zip)"
+        echo "Archive created: $(ls -lh gamelibs-macos-arm64.zip)"
     
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
-        name: gamelibs-macos-x86_64
-        path: gamelibs-macos-x86_64.zip
+        name: gamelibs-macos-arm64
+        path: gamelibs-macos-arm64.zip
         retention-days: 7
 
   create-release:
@@ -821,7 +823,7 @@ jobs:
     - name: Download macOS artifact
       uses: actions/download-artifact@v4
       with:
-        name: gamelibs-macos-x86_64
+        name: gamelibs-macos-arm64
     
     - name: Generate release notes
       run: |
@@ -847,7 +849,7 @@ jobs:
           - SDL2: DirectX, OpenGL, Vulkan support
           - Dynamic libraries (.dll) and import libraries (.lib)
         
-        - **macOS x86_64** (\`gamelibs-macos-x86_64.zip\`)
+        - **macOS ARM64** (\`gamelibs-macos-arm64.zip\`) - Apple Silicon native
           - SDL2: Metal, OpenGL, Vulkan support
           - Dynamic libraries (.dylib) and static libraries (.a)
         
@@ -878,7 +880,7 @@ jobs:
         files: |
           gamelibs-linux-x86_64.zip
           gamelibs-windows-x86_64.zip
-          gamelibs-macos-x86_64.zip
+          gamelibs-macos-arm64.zip
         draft: false
         prerelease: false
       env:

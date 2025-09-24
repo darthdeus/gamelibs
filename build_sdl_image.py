@@ -80,6 +80,12 @@ def build_zlib(build_dir, install_dir, platform_name):
     
     # Configure and build
     env = os.environ.copy()
+    
+    # Force arm64 architecture on macOS for Apple Silicon
+    if platform_name == "macos":
+        env["CFLAGS"] = "-arch arm64"
+        env["LDFLAGS"] = "-arch arm64"
+    
     if platform_name == "windows":
         # Windows build using CMake
         build_path = zlib_src / "build"
@@ -132,10 +138,11 @@ def build_libpng(build_dir, install_dir, platform_name):
     cppflags = f"-I{install_dir.resolve()}/include"
     ldflags = f"-L{install_dir.resolve()}/lib"
     
-    # Fix macOS fp.h header issue by disabling ARM NEON optimizations
+    # Fix macOS fp.h header issue and force arm64 architecture for Apple Silicon
     if platform_name == "macos":
-        cflags += " -DPNG_ARM_NEON_OPT=0"
-        cppflags += " -DPNG_ARM_NEON_OPT=0"
+        cflags += " -DPNG_ARM_NEON_OPT=0 -arch arm64"
+        cppflags += " -DPNG_ARM_NEON_OPT=0 -arch arm64"
+        ldflags += " -arch arm64"
     
     # Override any existing flags to ensure our paths come first
     env["CFLAGS"] = cflags
@@ -221,6 +228,8 @@ def build_libjpeg(build_dir, install_dir, platform_name):
     
     if platform_name == "windows":
         cmake_args.extend(["-G", "Visual Studio 17 2022", "-A", "x64"])
+    elif platform_name == "macos":
+        cmake_args.append("-DCMAKE_OSX_ARCHITECTURES=arm64")
     
     run_command(cmake_args, cwd=build_path)
     run_command(["cmake", "--build", ".", "--config", "Release"], cwd=build_path)
@@ -262,6 +271,8 @@ def build_libwebp(build_dir, install_dir, platform_name):
     
     if platform_name == "windows":
         cmake_args.extend(["-G", "Visual Studio 17 2022", "-A", "x64"])
+    elif platform_name == "macos":
+        cmake_args.append("-DCMAKE_OSX_ARCHITECTURES=arm64")
     
     run_command(cmake_args, cwd=build_path)
     run_command(["cmake", "--build", ".", "--config", "Release"], cwd=build_path)
@@ -287,7 +298,10 @@ def build_sdl_image(build_dir, install_dir, platform_name):
     shutil.copytree(vendored_src, sdl_image_src)
     
     # Find SDL2
-    sdl2_dir = Path.cwd() / "prebuilt" / platform_name / "x86_64"
+    if platform_name == "macos":
+        sdl2_dir = Path.cwd() / "prebuilt" / platform_name / "arm64"
+    else:
+        sdl2_dir = Path.cwd() / "prebuilt" / platform_name / "x86_64"
     if not sdl2_dir.exists():
         print(f"Error: SDL2 not found at {sdl2_dir}")
         print("Please build SDL2 first using build_sdl2.py")
@@ -341,8 +355,8 @@ def build_sdl_image(build_dir, install_dir, platform_name):
                 cmake_args[i] = f"-DWEBP_LIBRARY={install_dir.resolve()}/lib/webp.lib"
     elif platform_name == "macos":
         cmake_args.extend([
-            "-DCMAKE_OSX_ARCHITECTURES=x86_64",
-            "-DCMAKE_OSX_DEPLOYMENT_TARGET=10.12"
+            "-DCMAKE_OSX_ARCHITECTURES=arm64",
+            "-DCMAKE_OSX_DEPLOYMENT_TARGET=11.0"
         ])
     
     env = os.environ.copy()
@@ -359,7 +373,10 @@ def main():
     
     # Setup directories with absolute paths
     build_dir = Path.cwd() / "build" / "sdl_image"
-    install_dir = Path.cwd() / "prebuilt" / platform_name / "x86_64"
+    if platform_name == "macos":
+        install_dir = Path.cwd() / "prebuilt" / platform_name / "arm64"
+    else:
+        install_dir = Path.cwd() / "prebuilt" / platform_name / "x86_64"
     
     build_dir.mkdir(parents=True, exist_ok=True)
     install_dir.mkdir(parents=True, exist_ok=True)
