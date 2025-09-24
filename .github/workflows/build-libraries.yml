@@ -8,6 +8,12 @@ on:
   pull_request:
     branches: [ master, main ]
   workflow_dispatch:
+    inputs:
+      clear_cache:
+        description: 'Clear build cache'
+        required: false
+        default: false
+        type: boolean
 
 jobs:
   build-ubuntu:
@@ -16,6 +22,52 @@ jobs:
     
     steps:
     - uses: actions/checkout@v4
+    
+    - name: Generate cache keys
+      id: cache-keys
+      run: |
+        # Cache version - increment this to force cache rebuild
+        CACHE_VERSION="v1"
+        
+        # Add manual cache clear suffix if requested
+        if [ "${{ github.event.inputs.clear_cache }}" = "true" ]; then
+          CACHE_SUFFIX="-cleared-$(date +%s)"
+        else
+          CACHE_SUFFIX=""
+        fi
+        
+        # Generate hash of SDL2 source for cache key
+        SDL2_HASH=$(find SDL2-2.32.4 -type f -name '*.c' -o -name '*.h' -o -name 'CMakeLists.txt' | head -100 | xargs sha256sum | sha256sum | cut -d' ' -f1)
+        echo "sdl2-hash=${CACHE_VERSION}-${SDL2_HASH}${CACHE_SUFFIX}" >> $GITHUB_OUTPUT
+        
+        # Generate hash of FreeType source for cache key
+        FT_HASH=$(find freetype-2.14.1 -type f -name '*.c' -o -name '*.h' -o -name 'CMakeLists.txt' | head -100 | xargs sha256sum | sha256sum | cut -d' ' -f1)
+        echo "freetype-hash=${CACHE_VERSION}-${FT_HASH}${CACHE_SUFFIX}" >> $GITHUB_OUTPUT
+        
+        # Generate hash of cimgui source for cache key
+        CIMGUI_HASH=$(find cimgui imgui_backends -type f -name '*.cpp' -o -name '*.h' -o -name '*.py' 2>/dev/null | xargs sha256sum 2>/dev/null | sha256sum | cut -d' ' -f1)
+        echo "cimgui-hash=${CACHE_VERSION}-${CIMGUI_HASH}${CACHE_SUFFIX}" >> $GITHUB_OUTPUT
+    
+    - name: Cache SDL2 build
+      id: cache-sdl2
+      uses: actions/cache@v3
+      with:
+        path: |
+          prebuilt/linux/x86_64/lib/libSDL2*
+          prebuilt/linux/x86_64/include/SDL2
+          prebuilt/linux/x86_64/lib/pkgconfig/sdl2.pc
+          prebuilt/linux/x86_64/bin/sdl2-config
+        key: sdl2-ubuntu-${{ steps.cache-keys.outputs.sdl2-hash }}
+    
+    - name: Cache FreeType build
+      id: cache-freetype
+      uses: actions/cache@v3
+      with:
+        path: |
+          prebuilt/linux/x86_64/lib/libfreetype*
+          prebuilt/linux/x86_64/include/freetype2
+          prebuilt/linux/x86_64/lib/pkgconfig/freetype2.pc
+        key: freetype-ubuntu-${{ steps.cache-keys.outputs.freetype-hash }}
     
     - name: Install build dependencies
       run: |
@@ -68,6 +120,7 @@ jobs:
         mkdir -p prebuilt/linux/x86_64
     
     - name: Build SDL2
+      if: steps.cache-sdl2.outputs.cache-hit != 'true'
       run: |
         cd build/SDL2
         cmake ../../SDL2-2.32.4 \
@@ -86,7 +139,17 @@ jobs:
         ninja -j$(nproc)
         ninja install
     
+    - name: SDL2 cache status
+      run: |
+        if [ "${{ steps.cache-sdl2.outputs.cache-hit }}" = "true" ]; then
+          echo "✓ SDL2 restored from cache"
+        else
+          echo "✓ SDL2 built from source"
+        fi
+        ls -la prebuilt/linux/x86_64/lib/libSDL2* || true
+    
     - name: Build FreeType
+      if: steps.cache-freetype.outputs.cache-hit != 'true'
       run: |
         cd build/freetype
         cmake ../../freetype-2.14.1 \
@@ -98,6 +161,15 @@ jobs:
           -DFT_DISABLE_BROTLI=ON
         ninja -j$(nproc)
         ninja install
+    
+    - name: FreeType cache status
+      run: |
+        if [ "${{ steps.cache-freetype.outputs.cache-hit }}" = "true" ]; then
+          echo "✓ FreeType restored from cache"
+        else
+          echo "✓ FreeType built from source"
+        fi
+        ls -la prebuilt/linux/x86_64/lib/libfreetype* || true
     
     - name: Build cimgui (ImGui C wrapper)
       run: |
