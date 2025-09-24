@@ -34,9 +34,10 @@ else:
 if IS_WINDOWS:
     LIB_EXT = ".dll"
     LIB_PREFIX = ""
-    CC = "cl"
-    CXX = "cl"
-    EXTRA_CFLAGS = []
+    # On Windows CI, we need to use the full path or setup the environment
+    CC = "cl.exe"
+    CXX = "cl.exe"
+    EXTRA_CFLAGS = ["/nologo", "/MD"]
     if CI_MODE and SDL2_PREFIX:
         # Windows might have SDL2 headers directly in include/
         SDL_INCLUDE_DIRS = [f"{SDL2_PREFIX}/include", f"{SDL2_PREFIX}/include/SDL2"]
@@ -234,21 +235,33 @@ def build_library():
     
     for i, src in enumerate(sources, 1):
         print(f"  [{i}/{len(sources)}] Compiling {src}...")
-        obj = src.replace(".cpp", ".o").replace("/", "_")
         
-        cmd = [CXX, "-O2", "-fPIC", "-c", src, "-o", obj]
-        cmd += ["-I.", "-Iimgui", "-Iimgui/backends"]
-        
-        # Add SDL2 include paths
-        if CI_MODE:
+        if IS_WINDOWS:
+            obj = src.replace(".cpp", ".obj").replace("/", "_")
+            cmd = [CXX, "/c", src, f"/Fo{obj}", "/O2", "/EHsc"]
+            cmd += ["/I.", "/Iimgui", "/Iimgui/backends"]
+            
+            # Add SDL2 include paths
             for inc_dir in SDL_INCLUDE_DIRS:
-                cmd += [f"-I{inc_dir}"]
+                cmd += [f"/I{inc_dir}"]
+            
+            cmd += ["/D_WINDOWS", "/DNDEBUG"]
+            cmd += EXTRA_CFLAGS
         else:
-            for inc_dir in SDL_INCLUDE_DIRS:
-                cmd += [f"-I../{inc_dir}"]
-        
-        cmd += ["-D_REENTRANT"]
-        cmd += EXTRA_CFLAGS
+            obj = src.replace(".cpp", ".o").replace("/", "_")
+            cmd = [CXX, "-O2", "-fPIC", "-c", src, "-o", obj]
+            cmd += ["-I.", "-Iimgui", "-Iimgui/backends"]
+            
+            # Add SDL2 include paths
+            if CI_MODE:
+                for inc_dir in SDL_INCLUDE_DIRS:
+                    cmd += [f"-I{inc_dir}"]
+            else:
+                for inc_dir in SDL_INCLUDE_DIRS:
+                    cmd += [f"-I../{inc_dir}"]
+            
+            cmd += ["-D_REENTRANT"]
+            cmd += EXTRA_CFLAGS
         
         if not run_cmd(cmd):
             print_error(f"Failed to compile {src}")
@@ -260,8 +273,13 @@ def build_library():
         # Link into shared library
         print("  Linking library...")
         output = f"cimgui_complete{LIB_EXT}"
-        cmd = [CXX, "-shared"] + obj_files + ["-o", output]
-        cmd += EXTRA_LDFLAGS
+        
+        if IS_WINDOWS:
+            cmd = ["link.exe", "/DLL", f"/OUT:{output}"] + obj_files
+            cmd += EXTRA_LDFLAGS
+        else:
+            cmd = [CXX, "-shared"] + obj_files + ["-o", output]
+            cmd += EXTRA_LDFLAGS
         
         if not run_cmd(cmd):
             print_error("Failed to link library")

@@ -349,12 +349,15 @@ jobs:
         ls -la prebuilt/windows/x86_64/lib/freetype* || true
         ls -la prebuilt/windows/x86_64/bin/freetype* || true
     
+    - name: Setup MSVC
+      uses: ilammy/msvc-dev-cmd@v1
+      
     - name: Build cimgui (ImGui C wrapper)
-      shell: bash
+      shell: cmd
       run: |
-        python build_imgui.py \
-          $PWD/prebuilt/windows/x86_64 \
-          $PWD/prebuilt/windows/x86_64
+        python build_imgui.py ^
+          %cd%\prebuilt\windows\x86_64 ^
+          %cd%\prebuilt\windows\x86_64
     
     - name: Build LuaJIT (Windows)
       shell: cmd
