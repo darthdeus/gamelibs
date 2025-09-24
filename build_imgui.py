@@ -165,13 +165,20 @@ def check_submodule():
     success, stdout, _ = run_cmd(["git", "status", "--porcelain"], cwd="cimgui", capture=True)
     if success and stdout.strip():
         print_warning("cimgui submodule has uncommitted changes")
-        response = input("  Reset submodule to clean state? (y/n): ")
-        if response.lower() == 'y':
+        if CI_MODE:
+            # In CI, automatically reset to clean state
+            print("  CI mode: Resetting submodule to clean state...")
             run_cmd(["git", "reset", "--hard"], cwd="cimgui")
             run_cmd(["git", "clean", "-fd"], cwd="cimgui")
             print_success("Submodule reset to clean state")
         else:
-            print_warning("Continuing with modified submodule...")
+            response = input("  Reset submodule to clean state? (y/n): ")
+            if response.lower() == 'y':
+                run_cmd(["git", "reset", "--hard"], cwd="cimgui")
+                run_cmd(["git", "clean", "-fd"], cwd="cimgui")
+                print_success("Submodule reset to clean state")
+            else:
+                print_warning("Continuing with modified submodule...")
     
     print_success("Submodule ready")
     return True
