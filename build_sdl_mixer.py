@@ -92,7 +92,8 @@ def build_libogg(build_dir, install_dir, platform_name):
         "cmake", "..",
         f"-DCMAKE_INSTALL_PREFIX={install_dir}",
         "-DBUILD_SHARED_LIBS=OFF",
-        "-DCMAKE_BUILD_TYPE=Release"
+        "-DCMAKE_BUILD_TYPE=Release",
+        "-DCMAKE_POLICY_VERSION_MINIMUM=3.5"  # Allow older CMakeLists.txt
     ]
     
     if platform_name == "windows":
@@ -129,7 +130,8 @@ def build_libvorbis(build_dir, install_dir, platform_name):
         f"-DCMAKE_INSTALL_PREFIX={install_dir}",
         f"-DOGG_ROOT={install_dir}",
         "-DBUILD_SHARED_LIBS=OFF",
-        "-DCMAKE_BUILD_TYPE=Release"
+        "-DCMAKE_BUILD_TYPE=Release",
+        "-DCMAKE_POLICY_VERSION_MINIMUM=3.5"  # Allow older CMakeLists.txt
     ]
     
     if platform_name == "windows":
@@ -172,7 +174,8 @@ def build_flac(build_dir, install_dir, platform_name):
         "-DBUILD_DOCS=OFF",
         "-DINSTALL_MANPAGES=OFF",
         "-DWITH_OGG=ON",
-        "-DCMAKE_BUILD_TYPE=Release"
+        "-DCMAKE_BUILD_TYPE=Release",
+        "-DCMAKE_POLICY_VERSION_MINIMUM=3.5"  # Allow older CMakeLists.txt
     ]
     
     if platform_name == "windows":
@@ -215,6 +218,7 @@ def build_mpg123(build_dir, install_dir, platform_name):
                 f"-DCMAKE_INSTALL_PREFIX={install_dir}",
                 "-DBUILD_SHARED_LIBS=OFF",
                 "-DCMAKE_BUILD_TYPE=Release",
+                "-DCMAKE_POLICY_VERSION_MINIMUM=3.5",  # Allow older CMakeLists.txt
                 "-G", "Visual Studio 17 2022", "-A", "x64"
             ]
             

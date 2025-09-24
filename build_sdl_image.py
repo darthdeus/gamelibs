@@ -21,7 +21,7 @@ SDL_IMAGE_VERSION = "2.8.2"
 LIBPNG_VERSION = "1.6.40"
 LIBPNG_URL = f"https://download.sourceforge.net/libpng/libpng-{LIBPNG_VERSION}.tar.gz"
 
-LIBJPEG_VERSION = "3.0.0"
+LIBJPEG_VERSION = "3.0.4"
 LIBJPEG_URL = f"https://github.com/libjpeg-turbo/libjpeg-turbo/releases/download/{LIBJPEG_VERSION}/libjpeg-turbo-{LIBJPEG_VERSION}.tar.gz"
 
 LIBWEBP_VERSION = "1.3.2"
@@ -116,19 +116,32 @@ def build_libpng(build_dir, install_dir, platform_name):
     
     # Configure and build
     env = os.environ.copy()
+    
+    # CRITICAL: Put our include path FIRST to override system headers
     cflags = f"-I{install_dir.resolve()}/include"
+    cppflags = f"-I{install_dir.resolve()}/include"
+    ldflags = f"-L{install_dir.resolve()}/lib"
     
     # Fix macOS fp.h header issue by disabling ARM NEON optimizations
     if platform_name == "macos":
         cflags += " -DPNG_ARM_NEON_OPT=0"
+        cppflags += " -DPNG_ARM_NEON_OPT=0"
     
+    # Override any existing flags to ensure our paths come first
     env["CFLAGS"] = cflags
-    env["LDFLAGS"] = f"-L{install_dir.resolve()}/lib"
+    env["CPPFLAGS"] = cppflags  
+    env["LDFLAGS"] = ldflags
     env["PKG_CONFIG_PATH"] = f"{install_dir.resolve()}/lib/pkgconfig"
     
-    # Ensure we find our zlib instead of system zlib
-    env["ZLIB_CFLAGS"] = f"-I{install_dir.resolve()}/include"
-    env["ZLIB_LIBS"] = f"-L{install_dir.resolve()}/lib -lz"
+    # Force libpng to use our zlib
+    env["ZLIB_CFLAGS"] = cppflags
+    env["ZLIB_LIBS"] = f"{ldflags} -lz"
+    
+    # Clear any system paths that might interfere
+    if "C_INCLUDE_PATH" in env:
+        del env["C_INCLUDE_PATH"]
+    if "CPLUS_INCLUDE_PATH" in env:
+        del env["CPLUS_INCLUDE_PATH"]
     
     if platform_name == "windows":
         # Windows build using CMake
@@ -145,21 +158,25 @@ def build_libpng(build_dir, install_dir, platform_name):
         run_command(["cmake", "--build", ".", "--config", "Release"], cwd=build_path)
         run_command(["cmake", "--install", "."], cwd=build_path)
     else:
-        # Unix-like build
+        # Unix-like build - force our zlib
         configure_args = [
             "./configure",
             f"--prefix={install_dir.resolve()}",
             "--enable-static",
             "--disable-shared",
-            f"--with-zlib-prefix={install_dir.resolve()}"
+            f"--with-zlib-prefix={install_dir.resolve()}",
+            f"CPPFLAGS=-I{install_dir.resolve()}/include",
+            f"LDFLAGS=-L{install_dir.resolve()}/lib"
         ]
         
         # Additional macOS-specific configure options to fix fp.h
         if platform_name == "macos":
             configure_args.extend([
                 "--disable-arm-neon",
-                "CPPFLAGS=-DPNG_ARM_NEON_OPT=0"
+                f"CPPFLAGS=-I{install_dir.resolve()}/include -DPNG_ARM_NEON_OPT=0"
             ])
+            # Remove the duplicate CPPFLAGS
+            configure_args = [arg for arg in configure_args if not arg.startswith("CPPFLAGS=") or "PNG_ARM_NEON" in arg]
         
         run_command(configure_args, cwd=png_src, env=env)
         run_command(["make", f"-j{os.cpu_count()}"], cwd=png_src)
@@ -187,7 +204,8 @@ def build_libjpeg(build_dir, install_dir, platform_name):
         f"-DCMAKE_INSTALL_PREFIX={install_dir.resolve()}",
         "-DENABLE_SHARED=OFF",
         "-DENABLE_STATIC=ON",
-        "-DCMAKE_BUILD_TYPE=Release"
+        "-DCMAKE_BUILD_TYPE=Release",
+        "-DCMAKE_POLICY_VERSION_MINIMUM=3.5"  # Allow older CMakeLists.txt
     ]
     
     if platform_name == "windows":
@@ -227,7 +245,8 @@ def build_libwebp(build_dir, install_dir, platform_name):
         "-DWEBP_BUILD_WEBPINFO=OFF",
         "-DWEBP_BUILD_WEBPMUX=OFF",
         "-DWEBP_BUILD_EXTRAS=OFF",
-        "-DCMAKE_BUILD_TYPE=Release"
+        "-DCMAKE_BUILD_TYPE=Release",
+        "-DCMAKE_POLICY_VERSION_MINIMUM=3.5"  # Allow older CMakeLists.txt
     ]
     
     if platform_name == "windows":
@@ -257,7 +276,7 @@ def build_sdl_image(build_dir, install_dir, platform_name):
     shutil.copytree(vendored_src, sdl_image_src)
     
     # Find SDL2
-    sdl2_dir = Path("prebuilt") / platform_name / "x86_64"
+    sdl2_dir = Path.cwd() / "prebuilt" / platform_name / "x86_64"
     if not sdl2_dir.exists():
         print(f"Error: SDL2 not found at {sdl2_dir}")
         print("Please build SDL2 first using build_sdl2.py")
