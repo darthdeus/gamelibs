@@ -276,6 +276,10 @@ def build_sdl_mixer(build_dir, install_dir, platform_name):
         print("Please build SDL2 first using build_sdl2.py")
         sys.exit(1)
     
+    # Check if mpg123 was built (won't be on Windows)
+    has_mpg123 = (install_dir / "lib" / "libmpg123.a").exists() or \
+                 (install_dir / "lib" / "mpg123.lib").exists()
+    
     # Build with CMake
     build_path = sdl_mixer_src / "build"
     build_path.mkdir(exist_ok=True)
@@ -294,9 +298,6 @@ def build_sdl_mixer(build_dir, install_dir, platform_name):
         "-DSDL2MIXER_WAV=ON",
         "-DSDL2MIXER_OGG=ON",
         "-DSDL2MIXER_OGG_SHARED=OFF",
-        "-DSDL2MIXER_MP3=ON",
-        "-DSDL2MIXER_MP3_MPG123=ON",
-        "-DSDL2MIXER_MP3_MPG123_SHARED=OFF",
         "-DSDL2MIXER_FLAC=ON",
         "-DSDL2MIXER_FLAC_LIBFLAC=ON",
         "-DSDL2MIXER_FLAC_LIBFLAC_SHARED=OFF",
@@ -311,10 +312,21 @@ def build_sdl_mixer(build_dir, install_dir, platform_name):
         f"-DVORBIS_INCLUDE_DIR={install_dir}/include",
         f"-DFLAC_LIBRARY={install_dir}/lib/libFLAC.a",
         f"-DFLAC_INCLUDE_DIR={install_dir}/include",
-        f"-DMPG123_LIBRARY={install_dir}/lib/libmpg123.a",
-        f"-DMPG123_INCLUDE_DIR={install_dir}/include",
         "-DCMAKE_BUILD_TYPE=Release"
     ]
+    
+    # Only enable MP3 support if mpg123 was successfully built
+    if has_mpg123:
+        cmake_args.extend([
+            "-DSDL2MIXER_MP3=ON",
+            "-DSDL2MIXER_MP3_MPG123=ON",
+            "-DSDL2MIXER_MP3_MPG123_SHARED=OFF",
+            f"-DMPG123_LIBRARY={install_dir}/lib/libmpg123.a",
+            f"-DMPG123_INCLUDE_DIR={install_dir}/include",
+        ])
+    else:
+        cmake_args.append("-DSDL2MIXER_MP3=OFF")
+        print("Note: MP3 support disabled (mpg123 not available)")
     
     if platform_name == "windows":
         cmake_args.extend(["-G", "Visual Studio 17 2022", "-A", "x64"])
@@ -328,7 +340,7 @@ def build_sdl_mixer(build_dir, install_dir, platform_name):
                 cmake_args[i] = f"-DVORBISFILE_LIBRARY={install_dir}/lib/vorbisfile.lib"
             elif arg.startswith("-DFLAC_LIBRARY="):
                 cmake_args[i] = f"-DFLAC_LIBRARY={install_dir}/lib/FLAC.lib"
-            elif arg.startswith("-DMPG123_LIBRARY="):
+            elif arg.startswith("-DMPG123_LIBRARY=") and has_mpg123:
                 cmake_args[i] = f"-DMPG123_LIBRARY={install_dir}/lib/mpg123.lib"
     elif platform_name == "macos":
         cmake_args.extend([
@@ -382,7 +394,11 @@ def main():
         print("  - WAV (built-in)")
         print("  - OGG/Vorbis")
         print("  - FLAC")
-        print("  - MP3 (via mpg123)")
+        if (install_dir / "lib" / "libmpg123.a").exists() or \
+           (install_dir / "lib" / "mpg123.lib").exists():
+            print("  - MP3 (via mpg123)")
+        else:
+            print("  - MP3 (not available on this platform)")
 
 if __name__ == "__main__":
     main()
