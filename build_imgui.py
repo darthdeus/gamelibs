@@ -156,7 +156,7 @@ def check_submodule():
     cimgui_dir = Path("cimgui")
     
     # Check if submodule is initialized
-    if not cimgui_dir.exists() or not (cimgui_dir / "imgui").exists():
+    if not cimgui_dir.exists():
         print("  Initializing submodule...")
         if not run_cmd(["git", "submodule", "update", "--init", "--recursive"]):
             print_error("Failed to initialize submodule")
@@ -180,6 +180,13 @@ def check_submodule():
                 print_success("Submodule reset to clean state")
             else:
                 print_warning("Continuing with modified submodule...")
+    
+    # Check for imgui submodule inside cimgui
+    if not (cimgui_dir / "imgui").exists():
+        print("  Initializing imgui submodule inside cimgui...")
+        if not run_cmd(["git", "submodule", "update", "--init", "--recursive"], cwd="cimgui"):
+            print_error("Failed to initialize imgui submodule")
+            return False
     
     print_success("Submodule ready")
     return True

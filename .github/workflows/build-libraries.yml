@@ -445,7 +445,8 @@ jobs:
     
     - name: Initialize submodules
       run: |
-        git submodule update --init --recursive --depth=1 || git submodule update --init --recursive
+        git submodule update --init --recursive
+        cd cimgui && git submodule update --init --recursive && cd ..
     
     - name: Setup build environment
       run: |
