@@ -116,8 +116,14 @@ def build_libpng(build_dir, install_dir, platform_name):
     
     # Configure and build
     env = os.environ.copy()
-    env["CFLAGS"] = f"-I{install_dir}/include"
-    env["LDFLAGS"] = f"-L{install_dir}/lib"
+    cflags = f"-I{install_dir.resolve()}/include"
+    
+    # Fix macOS fp.h header issue by disabling ARM NEON optimizations
+    if platform_name == "macos":
+        cflags += " -DPNG_ARM_NEON_OPT=0"
+    
+    env["CFLAGS"] = cflags
+    env["LDFLAGS"] = f"-L{install_dir.resolve()}/lib"
     
     if platform_name == "windows":
         # Windows build using CMake
@@ -265,6 +271,8 @@ def build_sdl_image(build_dir, install_dir, platform_name):
         "-DSDL2IMAGE_TIF=OFF",
         "-DSDL2IMAGE_AVIF=OFF",
         "-DSDL2IMAGE_JXL=OFF",
+        f"-DZLIB_LIBRARY={install_dir.resolve()}/lib/libz.a",
+        f"-DZLIB_INCLUDE_DIR={install_dir.resolve()}/include",
         f"-DPNG_LIBRARY={install_dir.resolve()}/lib/libpng.a",
         f"-DPNG_PNG_INCLUDE_DIR={install_dir.resolve()}/include",
         f"-DJPEG_LIBRARY={install_dir.resolve()}/lib/libjpeg.a",
@@ -276,10 +284,17 @@ def build_sdl_image(build_dir, install_dir, platform_name):
     
     if platform_name == "windows":
         cmake_args.extend(["-G", "Visual Studio 17 2022", "-A", "x64"])
-        # Windows static lib names might be different
-        cmake_args[-6] = f"-DPNG_LIBRARY={install_dir.resolve()}/lib/libpng16_static.lib"
-        cmake_args[-4] = f"-DJPEG_LIBRARY={install_dir.resolve()}/lib/jpeg-static.lib"
-        cmake_args[-2] = f"-DWEBP_LIBRARY={install_dir.resolve()}/lib/webp.lib"
+        # Windows static lib names are different
+        # Update the library paths for Windows
+        for i, arg in enumerate(cmake_args):
+            if arg.startswith("-DZLIB_LIBRARY="):
+                cmake_args[i] = f"-DZLIB_LIBRARY={install_dir.resolve()}/lib/zlibstatic.lib"
+            elif arg.startswith("-DPNG_LIBRARY="):
+                cmake_args[i] = f"-DPNG_LIBRARY={install_dir.resolve()}/lib/libpng16_static.lib"
+            elif arg.startswith("-DJPEG_LIBRARY="):
+                cmake_args[i] = f"-DJPEG_LIBRARY={install_dir.resolve()}/lib/jpeg-static.lib"
+            elif arg.startswith("-DWEBP_LIBRARY="):
+                cmake_args[i] = f"-DWEBP_LIBRARY={install_dir.resolve()}/lib/webp.lib"
     elif platform_name == "macos":
         cmake_args.extend([
             "-DCMAKE_OSX_ARCHITECTURES=x86_64",
@@ -298,12 +313,16 @@ def main():
     platform_name = get_platform()
     print(f"Building SDL_image for {platform_name}")
     
-    # Setup directories
-    build_dir = Path("build") / "sdl_image"
-    install_dir = Path("prebuilt") / platform_name / "x86_64"
+    # Setup directories with absolute paths
+    build_dir = Path.cwd() / "build" / "sdl_image"
+    install_dir = Path.cwd() / "prebuilt" / platform_name / "x86_64"
     
     build_dir.mkdir(parents=True, exist_ok=True)
     install_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Ensure lib and include dirs exist before building dependencies
+    (install_dir / "lib").mkdir(parents=True, exist_ok=True)
+    (install_dir / "include").mkdir(parents=True, exist_ok=True)
     
     # Build dependencies directly into main install dir so SDL_image can find them
     build_zlib(build_dir, install_dir, platform_name)

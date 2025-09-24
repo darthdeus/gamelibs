@@ -184,7 +184,7 @@ def build_flac(build_dir, install_dir, platform_name):
         ])
     
     env = os.environ.copy()
-    env["PKG_CONFIG_PATH"] = f"{install_dir}/lib/pkgconfig"
+    env["PKG_CONFIG_PATH"] = f"{install_dir.resolve()}/lib/pkgconfig"
     
     run_command(cmake_args, cwd=build_path, env=env)
     run_command(["cmake", "--build", ".", "--config", "Release"], cwd=build_path)
@@ -228,7 +228,7 @@ def build_mpg123(build_dir, install_dir, platform_name):
         # Unix-like build
         configure_args = [
             "./configure",
-            f"--prefix={install_dir}",
+            f"--prefix={install_dir.resolve()}",
             "--enable-static",
             "--disable-shared",
             "--with-audio=dummy",  # We only need decoding, not audio output
@@ -262,7 +262,7 @@ def build_sdl_mixer(build_dir, install_dir, platform_name):
     shutil.copytree(vendored_src, sdl_mixer_src)
     
     # Find SDL2
-    sdl2_dir = Path("prebuilt") / platform_name / "x86_64"
+    sdl2_dir = Path.cwd() / "prebuilt" / platform_name / "x86_64"
     if not sdl2_dir.exists():
         print(f"Error: SDL2 not found at {sdl2_dir}")
         print("Please build SDL2 first using build_sdl2.py")
@@ -322,9 +322,9 @@ def build_sdl_mixer(build_dir, install_dir, platform_name):
         ])
     
     env = os.environ.copy()
-    env["CFLAGS"] = f"-I{install_dir}/include -I{sdl2_dir.resolve()}/include"
-    env["LDFLAGS"] = f"-L{install_dir}/lib -L{sdl2_dir.resolve()}/lib"
-    env["PKG_CONFIG_PATH"] = f"{install_dir}/lib/pkgconfig:{sdl2_dir.resolve()}/lib/pkgconfig"
+    env["CFLAGS"] = f"-I{install_dir.resolve()}/include -I{sdl2_dir.resolve()}/include"
+    env["LDFLAGS"] = f"-L{install_dir.resolve()}/lib -L{sdl2_dir.resolve()}/lib"
+    env["PKG_CONFIG_PATH"] = f"{install_dir.resolve()}/lib/pkgconfig:{sdl2_dir.resolve()}/lib/pkgconfig"
     
     run_command(cmake_args, cwd=build_path, env=env)
     run_command(["cmake", "--build", ".", "--config", "Release"], cwd=build_path)
@@ -334,20 +334,22 @@ def main():
     platform_name = get_platform()
     print(f"Building SDL_mixer for {platform_name}")
     
-    # Setup directories
-    build_dir = Path("build") / "sdl_mixer"
-    deps_dir = build_dir / "deps"
-    install_dir = Path("prebuilt") / platform_name / "x86_64"
+    # Setup directories with absolute paths
+    build_dir = Path.cwd() / "build" / "sdl_mixer"
+    install_dir = Path.cwd() / "prebuilt" / platform_name / "x86_64"
     
     build_dir.mkdir(parents=True, exist_ok=True)
-    deps_dir.mkdir(parents=True, exist_ok=True)
     install_dir.mkdir(parents=True, exist_ok=True)
     
-    # Build dependencies in order
-    build_libogg(build_dir, deps_dir, platform_name)
-    build_libvorbis(build_dir, deps_dir, platform_name)
-    build_flac(build_dir, deps_dir, platform_name)
-    build_mpg123(build_dir, deps_dir, platform_name)
+    # Ensure lib and include dirs exist before building dependencies
+    (install_dir / "lib").mkdir(parents=True, exist_ok=True)
+    (install_dir / "include").mkdir(parents=True, exist_ok=True)
+    
+    # Build dependencies directly into main install dir so SDL_mixer can find them
+    build_libogg(build_dir, install_dir, platform_name)
+    build_libvorbis(build_dir, install_dir, platform_name)
+    build_flac(build_dir, install_dir, platform_name)
+    build_mpg123(build_dir, install_dir, platform_name)
     
     # Build SDL_mixer
     build_sdl_mixer(build_dir, install_dir, platform_name)
