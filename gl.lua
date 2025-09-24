@@ -87,6 +87,138 @@ ffi.cdef[[
     void* SDL_GL_GetProcAddress(const char* proc);
 ]]
 
+-- FreeType C definitions
+ffi.cdef[[
+    typedef struct FT_LibraryRec_* FT_Library;
+    typedef struct FT_FaceRec_* FT_Face;
+    typedef int FT_Error;
+    typedef long FT_Long;
+    typedef unsigned long FT_ULong;
+    typedef int FT_Int;
+    typedef unsigned int FT_UInt;
+    typedef int FT_Int32;
+    typedef short FT_Short;
+    typedef unsigned short FT_UShort;
+    typedef signed long FT_Pos;
+    typedef signed long FT_Fixed;
+    typedef signed long FT_F26Dot6;
+    
+    typedef struct FT_Vector_ {
+        FT_Pos x;
+        FT_Pos y;
+    } FT_Vector;
+    
+    typedef struct FT_BBox_ {
+        FT_Pos xMin, yMin;
+        FT_Pos xMax, yMax;
+    } FT_BBox;
+    
+    typedef struct FT_Bitmap_ {
+        unsigned int rows;
+        unsigned int width;
+        int pitch;
+        unsigned char* buffer;
+        unsigned short num_grays;
+        unsigned char pixel_mode;
+        unsigned char palette_mode;
+        void* palette;
+    } FT_Bitmap;
+    
+    typedef struct FT_Glyph_Metrics_ {
+        FT_Pos width;
+        FT_Pos height;
+        FT_Pos horiBearingX;
+        FT_Pos horiBearingY;
+        FT_Pos horiAdvance;
+        FT_Pos vertBearingX;
+        FT_Pos vertBearingY;
+        FT_Pos vertAdvance;
+    } FT_Glyph_Metrics;
+    
+    typedef struct FT_GlyphSlotRec_* FT_GlyphSlot;
+    
+    typedef struct FT_GlyphSlotRec_ {
+        FT_Library library;
+        FT_Face face;
+        FT_GlyphSlot next;
+        FT_UInt glyph_index;
+        FT_ULong generic_generic;
+        void* generic_data;
+        FT_Glyph_Metrics metrics;
+        FT_Fixed linearHoriAdvance;
+        FT_Fixed linearVertAdvance;
+        FT_Vector advance;
+        int format;
+        FT_Bitmap bitmap;
+        FT_Int bitmap_left;
+        FT_Int bitmap_top;
+        // ... more fields we don't need
+    } FT_GlyphSlotRec;
+    
+    typedef struct FT_Size_Metrics_ {
+        FT_UShort x_ppem;
+        FT_UShort y_ppem;
+        FT_Fixed x_scale;
+        FT_Fixed y_scale;
+        FT_Pos ascender;
+        FT_Pos descender;
+        FT_Pos height;
+        FT_Pos max_advance;
+    } FT_Size_Metrics;
+    
+    typedef struct FT_SizeRec_* FT_Size;
+    
+    typedef struct FT_FaceRec_ {
+        FT_Long num_faces;
+        FT_Long face_index;
+        FT_Long face_flags;
+        FT_Long style_flags;
+        FT_Long num_glyphs;
+        char* family_name;
+        char* style_name;
+        FT_Int num_fixed_sizes;
+        void* available_sizes;
+        FT_Int num_charmaps;
+        void* charmaps;
+        void* generic_data;
+        void* generic_destructor;
+        FT_BBox bbox;
+        FT_UShort units_per_EM;
+        FT_Short ascender;
+        FT_Short descender;
+        FT_Short height;
+        FT_Short max_advance_width;
+        FT_Short max_advance_height;
+        FT_Short underline_position;
+        FT_Short underline_thickness;
+        FT_GlyphSlot glyph;
+        FT_Size size;
+        void* charmap;
+        // ... more fields
+    } FT_FaceRec;
+    
+    // FreeType functions
+    FT_Error FT_Init_FreeType(FT_Library* library);
+    FT_Error FT_New_Face(FT_Library library, const char* filepathname, FT_Long face_index, FT_Face* aface);
+    FT_Error FT_New_Memory_Face(FT_Library library, const unsigned char* file_base, FT_Long file_size, FT_Long face_index, FT_Face* aface);
+    FT_Error FT_Set_Pixel_Sizes(FT_Face face, FT_UInt pixel_width, FT_UInt pixel_height);
+    FT_Error FT_Set_Char_Size(FT_Face face, FT_F26Dot6 char_width, FT_F26Dot6 char_height, FT_UInt horz_resolution, FT_UInt vert_resolution);
+    FT_UInt FT_Get_Char_Index(FT_Face face, FT_ULong charcode);
+    FT_Error FT_Load_Glyph(FT_Face face, FT_UInt glyph_index, FT_Int32 load_flags);
+    FT_Error FT_Load_Char(FT_Face face, FT_ULong char_code, FT_Int32 load_flags);
+    FT_Error FT_Render_Glyph(FT_GlyphSlot slot, int render_mode);
+    FT_Error FT_Done_Face(FT_Face face);
+    FT_Error FT_Done_FreeType(FT_Library library);
+    
+    // Load flags
+    static const int FT_LOAD_DEFAULT = 0;
+    static const int FT_LOAD_RENDER = 4;
+    
+    // Render modes
+    static const int FT_RENDER_MODE_NORMAL = 0;
+    static const int FT_RENDER_MODE_MONO = 1;
+]]
+
 -- ImGui C definitions (from cimgui)
 ffi.cdef[[
     typedef struct ImGuiContext ImGuiContext;
@@ -149,8 +281,24 @@ local GL_COMPILE_STATUS = 0x8B81
 local GL_LINK_STATUS = 0x8B82
 local GL_ARRAY_BUFFER = 0x8892
 local GL_STATIC_DRAW = 0x88E4
+local GL_DYNAMIC_DRAW = 0x88E8
 local GL_FLOAT = 0x1406
 local GL_FALSE = 0
+local GL_TEXTURE_2D = 0x0DE1
+local GL_TEXTURE0 = 0x84C0
+local GL_UNSIGNED_BYTE = 0x1401
+local GL_RED = 0x1903
+local GL_ALPHA = 0x1906
+local GL_TEXTURE_MIN_FILTER = 0x2801
+local GL_TEXTURE_MAG_FILTER = 0x2800
+local GL_LINEAR = 0x2601
+local GL_TEXTURE_WRAP_S = 0x2802
+local GL_TEXTURE_WRAP_T = 0x2803
+local GL_CLAMP_TO_EDGE = 0x812F
+local GL_BLEND = 0x0BE2
+local GL_SRC_ALPHA = 0x0302
+local GL_ONE_MINUS_SRC_ALPHA = 0x0303
+local GL_UNPACK_ALIGNMENT = 0x0CF5
 
 -- OpenGL function pointers
 local glClear, glClearColor, glDrawArrays, glViewport
@@ -158,6 +306,9 @@ local glCreateShader, glShaderSource, glCompileShader, glGetShaderiv
 local glCreateProgram, glAttachShader, glLinkProgram, glUseProgram, glGetProgramiv
 local glGenBuffers, glBindBuffer, glBufferData
 local glGenVertexArrays, glBindVertexArray, glVertexAttribPointer, glEnableVertexAttribArray
+local glGenTextures, glBindTexture, glTexImage2D, glTexParameteri, glActiveTexture
+local glEnable, glBlendFunc, glDisable
+local glGetUniformLocation, glUniform1i, glUniformMatrix4fv
 
 -- Load SDL2 library from prebuilt directory
 print("Loading SDL2 from prebuilt libraries...")
@@ -171,6 +322,10 @@ end
 -- Load cimgui complete (includes ImGui + backends)
 print("Loading cimgui...")
 local imgui = ffi.load(lib_path .. "/lib/cimgui_complete" .. lib_ext)
+
+-- Load FreeType
+print("Loading FreeType...")
+local ft = ffi.load(lib_path .. "/lib/libfreetype" .. lib_ext)
 
 -- Helper function to load OpenGL functions
 local function loadGLFunction(name)
@@ -240,10 +395,24 @@ glGetProgramiv = ffi.cast("void (*)(unsigned int, unsigned int, int*)", loadGLFu
 glGenBuffers = ffi.cast("void (*)(int, unsigned int*)", loadGLFunction("glGenBuffers"))
 glBindBuffer = ffi.cast("void (*)(unsigned int, unsigned int)", loadGLFunction("glBindBuffer"))
 glBufferData = ffi.cast("void (*)(unsigned int, long, const void*, unsigned int)", loadGLFunction("glBufferData"))
+glBufferSubData = ffi.cast("void (*)(unsigned int, long, long, const void*)", loadGLFunction("glBufferSubData"))
+glPixelStorei = ffi.cast("void (*)(unsigned int, int)", loadGLFunction("glPixelStorei"))
 glGenVertexArrays = ffi.cast("void (*)(int, unsigned int*)", loadGLFunction("glGenVertexArrays"))
 glBindVertexArray = ffi.cast("void (*)(unsigned int)", loadGLFunction("glBindVertexArray"))
 glVertexAttribPointer = ffi.cast("void (*)(unsigned int, int, unsigned int, unsigned char, int, const void*)", loadGLFunction("glVertexAttribPointer"))
 glEnableVertexAttribArray = ffi.cast("void (*)(unsigned int)", loadGLFunction("glEnableVertexAttribArray"))
+glGenTextures = ffi.cast("void (*)(int, unsigned int*)", loadGLFunction("glGenTextures"))
+glBindTexture = ffi.cast("void (*)(unsigned int, unsigned int)", loadGLFunction("glBindTexture"))
+glTexImage2D = ffi.cast("void (*)(unsigned int, int, int, int, int, int, unsigned int, unsigned int, const void*)", loadGLFunction("glTexImage2D"))
+glTexParameteri = ffi.cast("void (*)(unsigned int, unsigned int, int)", loadGLFunction("glTexParameteri"))
+glActiveTexture = ffi.cast("void (*)(unsigned int)", loadGLFunction("glActiveTexture"))
+glEnable = ffi.cast("void (*)(unsigned int)", loadGLFunction("glEnable"))
+glDisable = ffi.cast("void (*)(unsigned int)", loadGLFunction("glDisable"))
+glBlendFunc = ffi.cast("void (*)(unsigned int, unsigned int)", loadGLFunction("glBlendFunc"))
+glGetUniformLocation = ffi.cast("int (*)(unsigned int, const char*)", loadGLFunction("glGetUniformLocation"))
+glUniform1i = ffi.cast("void (*)(int, int)", loadGLFunction("glUniform1i"))
+glUniform3f = ffi.cast("void (*)(int, float, float, float)", loadGLFunction("glUniform3f"))
+glUniformMatrix4fv = ffi.cast("void (*)(int, int, unsigned char, const float*)", loadGLFunction("glUniformMatrix4fv"))
 
 -- Setup ImGui
 print("Initializing ImGui...")
@@ -258,7 +427,48 @@ if not imgui.cImGui_ImplOpenGL3_Init("#version 130") then
     error("Failed to initialize ImGui OpenGL3 backend")
 end
 
--- Shader source code
+-- Initialize FreeType
+print("Initializing FreeType...")
+local ft_library = ffi.new("FT_Library[1]")
+if ft.FT_Init_FreeType(ft_library) ~= 0 then
+    error("Failed to initialize FreeType")
+end
+
+-- Load a font (try to find a system font)
+local font_paths = {
+    "/usr/share/fonts/TTF/FantasqueSansMono-Regular.ttf",  -- Arch Linux
+    "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+    "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+    "/System/Library/Fonts/Helvetica.ttc",  -- macOS
+    "C:/Windows/Fonts/arial.ttf",  -- Windows
+    "/usr/share/fonts/truetype/ubuntu/Ubuntu-R.ttf",
+}
+
+local ft_face = ffi.new("FT_Face[1]")
+local font_loaded = false
+
+for _, path in ipairs(font_paths) do
+    local file = io.open(path, "r")
+    if file then
+        file:close()
+        if ft.FT_New_Face(ft_library[0], path, 0, ft_face) == 0 then
+            print("Loaded font: " .. path)
+            font_loaded = true
+            break
+        end
+    end
+end
+
+if not font_loaded then
+    print("Warning: Could not load a system font")
+end
+
+-- Set font size
+if font_loaded then
+    ft.FT_Set_Pixel_Sizes(ft_face[0], 0, 48)
+end
+
+-- Shader source code for triangle
 local vertexShaderSource = [[
 #version 330 core
 layout (location = 0) in vec3 aPos;
@@ -274,6 +484,31 @@ out vec4 FragColor;
 void main()
 {
     FragColor = vec4(1.0f, 0.5f, 0.2f, 1.0f);
+}
+]]
+
+-- Shader source code for text rendering
+local textVertexShaderSource = [[
+#version 330 core
+layout (location = 0) in vec4 vertex;
+out vec2 TexCoord;
+void main()
+{
+    gl_Position = vec4(vertex.xy, 0.0, 1.0);
+    TexCoord = vertex.zw;
+}
+]]
+
+local textFragmentShaderSource = [[
+#version 330 core
+in vec2 TexCoord;
+out vec4 FragColor;
+uniform sampler2D text;
+uniform vec3 textColor;
+void main()
+{    
+    vec4 sampled = vec4(1.0, 1.0, 1.0, texture(text, TexCoord).r);
+    FragColor = vec4(textColor, 1.0) * sampled;
 }
 ]]
 
@@ -316,6 +551,39 @@ if success[0] == GL_FALSE then
     error("Failed to link shader program")
 end
 
+-- Create text shader program
+local textVertexShader = glCreateShader(GL_VERTEX_SHADER)
+local textVertexSourcePtr = ffi.new("const char*[1]")
+textVertexSourcePtr[0] = textVertexShaderSource
+glShaderSource(textVertexShader, 1, textVertexSourcePtr, nil)
+glCompileShader(textVertexShader)
+
+glGetShaderiv(textVertexShader, GL_COMPILE_STATUS, success)
+if success[0] == GL_FALSE then
+    error("Failed to compile text vertex shader")
+end
+
+local textFragmentShader = glCreateShader(GL_FRAGMENT_SHADER)
+local textFragmentSourcePtr = ffi.new("const char*[1]")
+textFragmentSourcePtr[0] = textFragmentShaderSource
+glShaderSource(textFragmentShader, 1, textFragmentSourcePtr, nil)
+glCompileShader(textFragmentShader)
+
+glGetShaderiv(textFragmentShader, GL_COMPILE_STATUS, success)
+if success[0] == GL_FALSE then
+    error("Failed to compile text fragment shader")
+end
+
+local textShaderProgram = glCreateProgram()
+glAttachShader(textShaderProgram, textVertexShader)
+glAttachShader(textShaderProgram, textFragmentShader)
+glLinkProgram(textShaderProgram)
+
+glGetProgramiv(textShaderProgram, GL_LINK_STATUS, success)
+if success[0] == GL_FALSE then
+    error("Failed to link text shader program")
+end
+
 -- Triangle vertices
 local vertices = ffi.new("float[9]", {
     -0.5, -0.5, 0.0,
@@ -337,9 +605,88 @@ glBufferData(GL_ARRAY_BUFFER, ffi.sizeof(vertices), vertices, GL_STATIC_DRAW)
 glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * ffi.sizeof("float"), nil)
 glEnableVertexAttribArray(0)
 
+-- Create text rendering VAO and VBO
+local textVAO = ffi.new("unsigned int[1]")
+local textVBO = ffi.new("unsigned int[1]")
+
+glGenVertexArrays(1, textVAO)
+glGenBuffers(1, textVBO)
+
+glBindVertexArray(textVAO[0])
+glBindBuffer(GL_ARRAY_BUFFER, textVBO[0])
+
+-- Reserve space for a quad (2 triangles, 6 vertices, 4 floats each: x,y,u,v)
+glBufferData(GL_ARRAY_BUFFER, 6 * 4 * ffi.sizeof("float"), nil, GL_DYNAMIC_DRAW)
+
+-- Setup vertex attribute (position and texture coordinates combined)
+glEnableVertexAttribArray(0)
+glVertexAttribPointer(0, 4, GL_FLOAT, GL_FALSE, 4 * ffi.sizeof("float"), nil)
+
+glBindBuffer(GL_ARRAY_BUFFER, 0)
+glBindVertexArray(0)
+
+-- Create texture for text
+local textTexture = ffi.new("unsigned int[1]")
+
 print("Setup complete!")
 print("Using libraries from: " .. lib_path)
 print("Press Escape or close window to exit...")
+
+-- Function to create texture from FreeType glyph and render it
+local function renderChar(char, x, y, scale)
+    if not font_loaded then return end
+    
+    -- Load character
+    if ft.FT_Load_Char(ft_face[0], string.byte(char), 4) ~= 0 then  -- FT_LOAD_RENDER = 4
+        return
+    end
+    
+    local glyph = ft_face[0].glyph
+    local bitmap = glyph.bitmap
+    
+    if bitmap.width == 0 or bitmap.rows == 0 then
+        return
+    end
+    
+    -- Generate texture if not already done
+    if textTexture[0] == 0 then
+        glGenTextures(1, textTexture)
+    end
+    glBindTexture(GL_TEXTURE_2D, textTexture[0])
+    
+    -- Use GL_ALPHA for single-channel FreeType bitmap
+    glPixelStorei(0x0CF5, 1)  -- GL_UNPACK_ALIGNMENT = 1
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, bitmap.width, bitmap.rows, 
+                 0, GL_RED, GL_UNSIGNED_BYTE, bitmap.buffer)
+    
+    -- Set texture options
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE)
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE)
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
+    
+    -- Calculate size
+    local w = bitmap.width * scale
+    local h = bitmap.rows * scale
+    
+    -- Update VBO for this character
+    local quadVertices = ffi.new("float[24]", {
+        -- positions     -- texture coords
+        x,     y + h,    0.0, 0.0,  -- top left
+        x,     y,        0.0, 1.0,  -- bottom left
+        x + w, y,        1.0, 1.0,  -- bottom right
+        
+        x,     y + h,    0.0, 0.0,  -- top left
+        x + w, y,        1.0, 1.0,  -- bottom right
+        x + w, y + h,    1.0, 0.0   -- top right
+    })
+    
+    glBindVertexArray(textVAO[0])
+    glBindBuffer(GL_ARRAY_BUFFER, textVBO[0])
+    glBufferSubData(GL_ARRAY_BUFFER, 0, ffi.sizeof(quadVertices), quadVertices)
+    glBindBuffer(GL_ARRAY_BUFFER, 0)
+    glBindVertexArray(0)
+end
 
 -- ImGui demo window state
 local show_demo = ffi.new("bool[1]", true)
@@ -409,6 +756,17 @@ while running do
         
         imgui.igCheckbox("Show Triangle", checkbox_value)
         
+        -- FreeType status
+        if font_loaded then
+            local face = ft_face[0]
+            imgui.igText(string.format("FreeType Font: %s %s", 
+                ffi.string(face.family_name or "Unknown"),
+                ffi.string(face.style_name or "")))
+            imgui.igText(string.format("Font size: 48px, Glyphs: %d", face.num_glyphs))
+        else
+            imgui.igText("FreeType: No font loaded")
+        end
+        
         -- FPS display
         imgui.igText(string.format("FPS: %.1f", fps))
     end
@@ -451,6 +809,50 @@ while running do
         glDrawArrays(GL_TRIANGLES, 0, 3)
     end
     
+    -- Draw FreeType text
+    if font_loaded then
+        -- Enable blending for text
+        glEnable(GL_BLEND)
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
+        
+        -- Setup text shader
+        glUseProgram(textShaderProgram)
+        
+        -- Load glUniform3f function
+        glUniform3f = ffi.cast("void (*)(int, float, float, float)", loadGLFunction("glUniform3f"))
+        
+        -- Set text color uniform (white)
+        local textColorLoc = glGetUniformLocation(textShaderProgram, "textColor")
+        glUniform3f(textColorLoc, 1.0, 1.0, 1.0)
+        
+        -- Bind texture uniform
+        local textureLoc = glGetUniformLocation(textShaderProgram, "text")
+        glUniform1i(textureLoc, 0)
+        
+        -- Render text string
+        local text = "Hello FreeType!"
+        local x = -0.5
+        local y = -0.8
+        local scale = 0.003
+        
+        for i = 1, #text do
+            local char = text:sub(i,i)
+            if char ~= " " then  -- Skip spaces for now
+                renderChar(char, x, y, scale)
+                if textTexture[0] > 0 then
+                    glActiveTexture(GL_TEXTURE0)
+                    glBindTexture(GL_TEXTURE_2D, textTexture[0])
+                    glBindVertexArray(textVAO[0])
+                    glDrawArrays(GL_TRIANGLES, 0, 6)
+                end
+            end
+            -- Move to next character position
+            x = x + 0.05  -- Fixed advance for simplicity
+        end
+        
+        glDisable(GL_BLEND)
+    end
+    
     imgui.cImGui_ImplOpenGL3_RenderDrawData(imgui.igGetDrawData())
     
     SDL.SDL_GL_SwapWindow(window)
@@ -461,6 +863,11 @@ print("Cleaning up...")
 imgui.cImGui_ImplOpenGL3_Shutdown()
 imgui.cImGui_ImplSDL2_Shutdown()
 imgui.igDestroyContext(nil)
+
+if font_loaded then
+    ft.FT_Done_Face(ft_face[0])
+end
+ft.FT_Done_FreeType(ft_library[0])
 
 SDL.SDL_GL_DeleteContext(gl_context)
 SDL.SDL_DestroyWindow(window)
