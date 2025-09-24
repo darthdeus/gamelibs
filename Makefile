@@ -43,7 +43,7 @@ release: check-git
 	@echo "✓ Created tag v$(NEXT_VERSION)"
 	@echo ""
 	@echo "Push the release with:"
-	@echo "  git push origin main v$(NEXT_VERSION)"
+	@echo "  git push origin master v$(NEXT_VERSION)"
 	@echo ""
 	@echo "Or use 'make push-release' to push automatically"
 
@@ -59,7 +59,7 @@ release-minor: check-git
 	@echo "✓ Created tag v$(NEXT_VERSION)"
 	@echo ""
 	@echo "Push the release with:"
-	@echo "  git push origin main v$(NEXT_VERSION)"
+	@echo "  git push origin master v$(NEXT_VERSION)"
 	@echo ""
 	@echo "Or use 'make push-release' to push automatically"
 
@@ -75,14 +75,14 @@ release-major: check-git
 	@echo "✓ Created tag v$(NEXT_VERSION)"
 	@echo ""
 	@echo "Push the release with:"
-	@echo "  git push origin main v$(NEXT_VERSION)"
+	@echo "  git push origin master v$(NEXT_VERSION)"
 	@echo ""
 	@echo "Or use 'make push-release' to push automatically"
 
 .PHONY: push-release
 push-release:
 	@echo "Pushing changes and tags to origin..."
-	@git push origin main
+	@git push origin master
 	@git push origin --tags
 	@echo "✓ Release pushed to GitHub"
 	@echo ""
