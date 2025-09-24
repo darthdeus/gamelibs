@@ -1,0 +1,7 @@
+build/
+prebuilt/
+*.zip
+*.tar.gz
+
+# Don't ignore the version file
+!.version
