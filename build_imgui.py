@@ -38,12 +38,13 @@ if IS_WINDOWS:
     CXX = "cl"
     EXTRA_CFLAGS = []
     if CI_MODE and SDL2_PREFIX:
-        SDL_INCLUDE = f"{SDL2_PREFIX}/include"
+        # Windows might have SDL2 headers directly in include/
+        SDL_INCLUDE_DIRS = [f"{SDL2_PREFIX}/include", f"{SDL2_PREFIX}/include/SDL2"]
         SDL_LIB_DIR = f"{SDL2_PREFIX}/lib"
         EXTRA_LDFLAGS = [f"/LIBPATH:{SDL_LIB_DIR}", "SDL2.lib", "SDL2main.lib", "opengl32.lib"]
     else:
         EXTRA_LDFLAGS = ["-lSDL2", "-lopengl32"]
-        SDL_INCLUDE = "C:/SDL2/include"
+        SDL_INCLUDE_DIRS = ["C:/SDL2/include"]
 elif IS_MACOS:
     LIB_EXT = ".dylib"
     LIB_PREFIX = "lib"
@@ -51,12 +52,12 @@ elif IS_MACOS:
     CXX = "clang++"
     EXTRA_CFLAGS = ["-stdlib=libc++"]
     if CI_MODE and SDL2_PREFIX:
-        SDL_INCLUDE = f"{SDL2_PREFIX}/include/SDL2"
+        SDL_INCLUDE_DIRS = [f"{SDL2_PREFIX}/include/SDL2", f"{SDL2_PREFIX}/include"]
         SDL_LIB_DIR = f"{SDL2_PREFIX}/lib"
         EXTRA_LDFLAGS = [f"-L{SDL_LIB_DIR}", "-lSDL2", "-framework", "OpenGL"]
     else:
         EXTRA_LDFLAGS = ["-lSDL2", "-framework", "OpenGL"]
-        SDL_INCLUDE = "/usr/local/include/SDL2"
+        SDL_INCLUDE_DIRS = ["/usr/local/include/SDL2"]
 else:  # Linux
     LIB_EXT = ".so"
     LIB_PREFIX = "lib"
@@ -64,33 +65,27 @@ else:  # Linux
     CXX = "g++"
     EXTRA_CFLAGS = []
     if CI_MODE and SDL2_PREFIX:
-        SDL_INCLUDE = f"{SDL2_PREFIX}/include/SDL2"
+        # Try both paths since SDL2 CMake install might use either
+        SDL_INCLUDE_DIRS = [f"{SDL2_PREFIX}/include/SDL2", f"{SDL2_PREFIX}/include"]
         SDL_LIB_DIR = f"{SDL2_PREFIX}/lib"
         EXTRA_LDFLAGS = [f"-L{SDL_LIB_DIR}", "-lSDL2", "-lGL", "-ldl", "-lm"]
     else:
         EXTRA_LDFLAGS = ["-L../bindings", "-lSDL2-2.0", "-lGL", "-ldl", "-Wl,-rpath,$ORIGIN/../bindings"]
-        SDL_INCLUDE = "bindings/SDL2-2.32.4/include"
+        SDL_INCLUDE_DIRS = ["bindings/SDL2-2.32.4/include"]
 
-# Colors for output
-class Colors:
-    GREEN = '\033[92m' if not IS_WINDOWS else ''
-    YELLOW = '\033[93m' if not IS_WINDOWS else ''
-    RED = '\033[91m' if not IS_WINDOWS else ''
-    BLUE = '\033[94m' if not IS_WINDOWS else ''
-    ENDC = '\033[0m' if not IS_WINDOWS else ''
-    BOLD = '\033[1m' if not IS_WINDOWS else ''
+# Simple text output - no colors to avoid encoding issues
 
 def print_step(msg):
-    print(f"\n{Colors.BLUE}{Colors.BOLD}==> {msg}{Colors.ENDC}")
+    print(f"\n==> {msg}")
 
 def print_success(msg):
-    print(f"{Colors.GREEN}✓ {msg}{Colors.ENDC}")
+    print(f"[OK] {msg}")
 
 def print_error(msg):
-    print(f"{Colors.RED}✗ {msg}{Colors.ENDC}")
+    print(f"[ERROR] {msg}")
 
 def print_warning(msg):
-    print(f"{Colors.YELLOW}⚠ {msg}{Colors.ENDC}")
+    print(f"[WARNING] {msg}")
 
 def run_cmd(cmd, cwd=None, capture=False):
     """Run a command and return success status"""
@@ -244,8 +239,13 @@ def build_library():
         cmd = [CXX, "-O2", "-fPIC", "-c", src, "-o", obj]
         cmd += ["-I.", "-Iimgui", "-Iimgui/backends"]
         
-        # Add SDL2 include path from bindings (we're in cimgui dir, so go up one level)
-        cmd += [f"-I../{SDL_INCLUDE}"]
+        # Add SDL2 include paths
+        if CI_MODE:
+            for inc_dir in SDL_INCLUDE_DIRS:
+                cmd += [f"-I{inc_dir}"]
+        else:
+            for inc_dir in SDL_INCLUDE_DIRS:
+                cmd += [f"-I../{inc_dir}"]
         
         cmd += ["-D_REENTRANT"]
         cmd += EXTRA_CFLAGS
@@ -417,14 +417,14 @@ end
     return success
 
 def main():
-    print(f"{Colors.BOLD}{'='*60}")
+    print(f"{'='*60}")
     print(f"   cimgui Build System")
     print(f"   Platform: {SYSTEM}")
     print(f"   Mode: {'CI' if CI_MODE else 'Local Development'}")
     if CI_MODE:
         print(f"   SDL2: {SDL2_PREFIX}")
         print(f"   Install: {INSTALL_PREFIX}")
-    print(f"{'='*60}{Colors.ENDC}")
+    print(f"{'='*60}")
     
     # In CI mode, skip some checks
     if not CI_MODE:
@@ -452,16 +452,16 @@ def main():
             print_warning("\nCould not update Rock file")
         
         if test_build():
-            print(f"\n{Colors.GREEN}{Colors.BOLD}{'='*60}")
-            print(f"   ✅ BUILD SUCCESSFUL!")
-            print(f"{'='*60}{Colors.ENDC}")
+            print(f"\n{'='*60}")
+            print(f"   BUILD SUCCESSFUL!")
+            print(f"{'='*60}")
             print(f"\nLibrary location: {INSTALL_PREFIX}/{LIB_PREFIX}cimgui_complete{LIB_EXT}")
         else:
             print_warning("\nBuild completed but test failed")
     else:
-        print(f"\n{Colors.GREEN}{Colors.BOLD}{'='*60}")
-        print(f"   ✅ BUILD SUCCESSFUL!")
-        print(f"{'='*60}{Colors.ENDC}")
+        print(f"\n{'='*60}")
+        print(f"   BUILD SUCCESSFUL!")
+        print(f"{'='*60}")
         print(f"\nLibrary installed to: {INSTALL_PREFIX}")
     
     return 0
