@@ -10,6 +10,7 @@ echo "Creating build directories..."
 mkdir -p build/SDL2
 mkdir -p build/freetype
 mkdir -p build/cimgui
+mkdir -p build/luajit
 mkdir -p prebuilt/linux/x86_64
 
 # Build SDL2
@@ -54,6 +55,13 @@ python3 build_imgui.py \
   $PWD/prebuilt/linux/x86_64 \
   $PWD/prebuilt/linux/x86_64
 
+# Build LuaJIT
+echo "Building LuaJIT..."
+cd luajit
+make -j$(nproc) PREFIX=$PWD/../prebuilt/linux/x86_64
+make install PREFIX=$PWD/../prebuilt/linux/x86_64
+cd ..
+
 # Create library info file
 echo "Creating library info..."
 cat > prebuilt/linux/x86_64/library_info.txt << EOF
@@ -64,6 +72,7 @@ Libraries included:
 - SDL2 Version: 2.32.4
 - FreeType Version: 2.14.1
 - cimgui (Dear ImGui C wrapper) with SDL2/OpenGL3 backends
+- LuaJIT 2.1 - Just-In-Time Compiler for Lua
 
 Libraries:
 $(ls -la prebuilt/linux/x86_64/lib/)

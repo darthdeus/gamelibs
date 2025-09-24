@@ -117,6 +117,7 @@ jobs:
         mkdir -p build/SDL2
         mkdir -p build/freetype
         mkdir -p build/cimgui
+        mkdir -p build/luajit
         mkdir -p prebuilt/linux/x86_64
     
     - name: Build SDL2
@@ -177,6 +178,14 @@ jobs:
           $PWD/prebuilt/linux/x86_64 \
           $PWD/prebuilt/linux/x86_64
     
+    - name: Build LuaJIT
+      run: |
+        cd luajit
+        make -j$(nproc) PREFIX=$PWD/../prebuilt/linux/x86_64
+        make install PREFIX=$PWD/../prebuilt/linux/x86_64
+        cd ..
+        echo "✓ LuaJIT built and installed"
+    
     - name: Create library info file
       run: |
         cat > prebuilt/linux/x86_64/library_info.txt << EOF
@@ -187,6 +196,7 @@ jobs:
         - SDL2 Version: 2.32.4
         - FreeType Version: 2.14.1
         - cimgui (Dear ImGui C wrapper) with SDL2/OpenGL3 backends
+        - LuaJIT 2.1 - Just-In-Time Compiler for Lua
         
         Libraries:
         $(ls -la prebuilt/linux/x86_64/lib/)
@@ -282,6 +292,7 @@ jobs:
         mkdir -p build/SDL2
         mkdir -p build/freetype
         mkdir -p build/cimgui
+        mkdir -p build/luajit
         mkdir -p prebuilt/windows/x86_64
     
     - name: Build SDL2
@@ -344,6 +355,23 @@ jobs:
           $PWD/prebuilt/windows/x86_64 \
           $PWD/prebuilt/windows/x86_64
     
+    - name: Build LuaJIT (Windows)
+      shell: cmd
+      run: |
+        cd luajit\src
+        call msvcbuild.bat
+        xcopy luajit.exe ..\..\prebuilt\windows\x86_64\bin\ /Y
+        xcopy lua51.dll ..\..\prebuilt\windows\x86_64\bin\ /Y
+        xcopy lua51.lib ..\..\prebuilt\windows\x86_64\lib\ /Y
+        xcopy luajit.h ..\..\prebuilt\windows\x86_64\include\ /Y
+        xcopy lua.h ..\..\prebuilt\windows\x86_64\include\ /Y
+        xcopy lauxlib.h ..\..\prebuilt\windows\x86_64\include\ /Y
+        xcopy lualib.h ..\..\prebuilt\windows\x86_64\include\ /Y
+        xcopy luaconf.h ..\..\prebuilt\windows\x86_64\include\ /Y
+        xcopy lua.hpp ..\..\prebuilt\windows\x86_64\include\ /Y
+        cd ..\..
+        echo LuaJIT built and installed
+    
     - name: Create library info file
       shell: bash
       run: |
@@ -355,6 +383,7 @@ jobs:
         - SDL2 Version: 2.32.4
         - FreeType Version: 2.14.1
         - cimgui (Dear ImGui C wrapper) with SDL2/OpenGL3 backends
+        - LuaJIT 2.1 - Just-In-Time Compiler for Lua
         
         Libraries:
         $(ls -la prebuilt/windows/x86_64/lib/)
@@ -420,6 +449,7 @@ jobs:
         - **SDL2** v2.32.4 - Cross-platform multimedia library
         - **FreeType** v2.14.1 - Font rendering library
         - **cimgui** - Dear ImGui C wrapper with SDL2/OpenGL3 backends
+        - **LuaJIT** 2.1 - Just-In-Time Compiler for Lua
         
         ### Platform Builds
         - **Linux x86_64** (\`gamelibs-linux-x86_64.zip\`)
