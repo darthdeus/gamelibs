@@ -18,7 +18,7 @@ from pathlib import Path
 SDL_IMAGE_VERSION = "2.8.2"
 # SDL_image is now vendored in the repository
 
-LIBPNG_VERSION = "1.6.40"
+LIBPNG_VERSION = "1.6.44"
 LIBPNG_URL = f"https://download.sourceforge.net/libpng/libpng-{LIBPNG_VERSION}.tar.gz"
 
 LIBJPEG_VERSION = "3.0.4"
@@ -114,6 +114,16 @@ def build_libpng(build_dir, install_dir, platform_name):
         shutil.rmtree(png_src)
     extract_archive(png_archive, build_dir)
     
+    # Patch pngpriv.h on macOS to remove fp.h dependency
+    if platform_name == "macos":
+        pngpriv_h = png_src / "pngpriv.h"
+        if pngpriv_h.exists():
+            content = pngpriv_h.read_text()
+            # Comment out the fp.h include
+            content = content.replace('#      include <fp.h>', '/* #      include <fp.h> */')
+            pngpriv_h.write_text(content)
+            print("Patched pngpriv.h to remove fp.h dependency")
+    
     # Configure and build
     env = os.environ.copy()
     
@@ -171,12 +181,13 @@ def build_libpng(build_dir, install_dir, platform_name):
         
         # Additional macOS-specific configure options to fix fp.h
         if platform_name == "macos":
+            # Remove the generic CPPFLAGS first
+            configure_args = [arg for arg in configure_args if not arg.startswith("CPPFLAGS=")]
+            # Add macOS-specific flags with ARM NEON disabled
             configure_args.extend([
                 "--disable-arm-neon",
-                f"CPPFLAGS=-I{install_dir.resolve()}/include -DPNG_ARM_NEON_OPT=0"
+                f"CPPFLAGS=-I{install_dir.resolve()}/include -DPNG_ARM_NEON_OPT=0 -DPNG_ARM_NEON_IMPLEMENTATION=0"
             ])
-            # Remove the duplicate CPPFLAGS
-            configure_args = [arg for arg in configure_args if not arg.startswith("CPPFLAGS=") or "PNG_ARM_NEON" in arg]
         
         run_command(configure_args, cwd=png_src, env=env)
         run_command(["make", f"-j{os.cpu_count()}"], cwd=png_src)
