@@ -124,6 +124,11 @@ def build_libpng(build_dir, install_dir, platform_name):
     
     env["CFLAGS"] = cflags
     env["LDFLAGS"] = f"-L{install_dir.resolve()}/lib"
+    env["PKG_CONFIG_PATH"] = f"{install_dir.resolve()}/lib/pkgconfig"
+    
+    # Ensure we find our zlib instead of system zlib
+    env["ZLIB_CFLAGS"] = f"-I{install_dir.resolve()}/include"
+    env["ZLIB_LIBS"] = f"-L{install_dir.resolve()}/lib -lz"
     
     if platform_name == "windows":
         # Windows build using CMake
@@ -141,13 +146,22 @@ def build_libpng(build_dir, install_dir, platform_name):
         run_command(["cmake", "--install", "."], cwd=build_path)
     else:
         # Unix-like build
-        run_command([
+        configure_args = [
             "./configure",
             f"--prefix={install_dir.resolve()}",
             "--enable-static",
             "--disable-shared",
             f"--with-zlib-prefix={install_dir.resolve()}"
-        ], cwd=png_src, env=env)
+        ]
+        
+        # Additional macOS-specific configure options to fix fp.h
+        if platform_name == "macos":
+            configure_args.extend([
+                "--disable-arm-neon",
+                "CPPFLAGS=-DPNG_ARM_NEON_OPT=0"
+            ])
+        
+        run_command(configure_args, cwd=png_src, env=env)
         run_command(["make", f"-j{os.cpu_count()}"], cwd=png_src)
         run_command(["make", "install"], cwd=png_src)
 

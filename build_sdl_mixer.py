@@ -309,12 +309,18 @@ def build_sdl_mixer(build_dir, install_dir, platform_name):
     
     if platform_name == "windows":
         cmake_args.extend(["-G", "Visual Studio 17 2022", "-A", "x64"])
-        # Windows static lib names might be different
-        cmake_args[-10] = f"-DOGG_LIBRARY={install_dir}/lib/ogg.lib"
-        cmake_args[-8] = f"-DVORBIS_LIBRARY={install_dir}/lib/vorbis.lib"
-        cmake_args[-7] = f"-DVORBISFILE_LIBRARY={install_dir}/lib/vorbisfile.lib"
-        cmake_args[-5] = f"-DFLAC_LIBRARY={install_dir}/lib/FLAC.lib"
-        cmake_args[-3] = f"-DMPG123_LIBRARY={install_dir}/lib/mpg123.lib"
+        # Windows static lib names are different - update library paths
+        for i, arg in enumerate(cmake_args):
+            if arg.startswith("-DOGG_LIBRARY="):
+                cmake_args[i] = f"-DOGG_LIBRARY={install_dir}/lib/ogg.lib"
+            elif arg.startswith("-DVORBIS_LIBRARY="):
+                cmake_args[i] = f"-DVORBIS_LIBRARY={install_dir}/lib/vorbis.lib"
+            elif arg.startswith("-DVORBISFILE_LIBRARY="):
+                cmake_args[i] = f"-DVORBISFILE_LIBRARY={install_dir}/lib/vorbisfile.lib"
+            elif arg.startswith("-DFLAC_LIBRARY="):
+                cmake_args[i] = f"-DFLAC_LIBRARY={install_dir}/lib/FLAC.lib"
+            elif arg.startswith("-DMPG123_LIBRARY="):
+                cmake_args[i] = f"-DMPG123_LIBRARY={install_dir}/lib/mpg123.lib"
     elif platform_name == "macos":
         cmake_args.extend([
             "-DCMAKE_OSX_ARCHITECTURES=x86_64",
