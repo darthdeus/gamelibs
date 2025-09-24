@@ -426,8 +426,156 @@ jobs:
         path: gamelibs-windows-x86_64.zip
         retention-days: 7
 
+  build-macos:
+    runs-on: macos-latest
+    name: Build macOS x86_64
+    
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: true
+    
+    - name: Setup build environment
+      run: |
+        brew install cmake ninja pkg-config
+        echo "Build environment ready"
+    
+    - name: Create build directories
+      run: |
+        mkdir -p build/{sdl2,freetype}
+        mkdir -p prebuilt/macos/x86_64/{lib,bin,include}
+    
+    # Cache SDL2 build
+    - name: Cache SDL2
+      id: cache-sdl2
+      uses: actions/cache@v4
+      with:
+        path: prebuilt/macos/x86_64
+        key: macos-sdl2-${{ hashFiles('SDL-release-2.32.4/**') }}-v1
+        restore-keys: |
+          macos-sdl2-
+    
+    - name: Build SDL2
+      if: steps.cache-sdl2.outputs.cache-hit != 'true'
+      run: |
+        cd build/sdl2
+        cmake ../../SDL-release-2.32.4 \
+          -GNinja \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DCMAKE_INSTALL_PREFIX=$PWD/../../prebuilt/macos/x86_64 \
+          -DSDL_SHARED=ON \
+          -DSDL_STATIC=ON
+        ninja -j$(sysctl -n hw.ncpu)
+        ninja install
+    
+    - name: SDL2 cache status
+      run: |
+        if [ "${{ steps.cache-sdl2.outputs.cache-hit }}" = "true" ]; then
+          echo "✓ SDL2 restored from cache"
+        else
+          echo "✓ SDL2 built from source"
+        fi
+        ls -la prebuilt/macos/x86_64/lib/libSDL2* || true
+    
+    # Cache FreeType build
+    - name: Cache FreeType
+      id: cache-freetype
+      uses: actions/cache@v4
+      with:
+        path: prebuilt/macos/x86_64
+        key: macos-freetype-${{ hashFiles('freetype-2.14.1/**') }}-v1
+        restore-keys: |
+          macos-freetype-
+    
+    - name: Build FreeType
+      if: steps.cache-freetype.outputs.cache-hit != 'true'
+      run: |
+        cd build/freetype
+        cmake ../../freetype-2.14.1 \
+          -GNinja \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DCMAKE_INSTALL_PREFIX=$PWD/../../prebuilt/macos/x86_64 \
+          -DBUILD_SHARED_LIBS=ON \
+          -DFT_DISABLE_HARFBUZZ=ON \
+          -DFT_DISABLE_BROTLI=ON
+        ninja -j$(sysctl -n hw.ncpu)
+        ninja install
+    
+    - name: FreeType cache status
+      run: |
+        if [ "${{ steps.cache-freetype.outputs.cache-hit }}" = "true" ]; then
+          echo "✓ FreeType restored from cache"
+        else
+          echo "✓ FreeType built from source"
+        fi
+        ls -la prebuilt/macos/x86_64/lib/libfreetype* || true
+    
+    - name: Build cimgui (ImGui C wrapper)
+      run: |
+        python3 build_imgui.py \
+          $PWD/prebuilt/macos/x86_64 \
+          $PWD/prebuilt/macos/x86_64
+    
+    - name: Build LuaJIT
+      run: |
+        cd luajit
+        make -j$(sysctl -n hw.ncpu) PREFIX=$PWD/../prebuilt/macos/x86_64 MACOSX_DEPLOYMENT_TARGET=10.12
+        make install PREFIX=$PWD/../prebuilt/macos/x86_64
+        cd ..
+        echo "✓ LuaJIT built and installed"
+    
+    - name: Create library info file
+      run: |
+        cat > prebuilt/macos/x86_64/library_info.txt << EOF
+        Built on: $(date)
+        Platform: macOS $(sw_vers -productVersion)
+        Architecture: x86_64
+        
+        Libraries included:
+        - SDL2 Version: 2.32.4
+        - FreeType Version: 2.14.1
+        - cimgui (Dear ImGui C wrapper) with SDL2/OpenGL3 backends
+        - LuaJIT Version: 2.1
+        
+        Library files:
+        EOF
+        echo "" >> prebuilt/macos/x86_64/library_info.txt
+        echo "=== SDL2 ===" >> prebuilt/macos/x86_64/library_info.txt
+        ls -la prebuilt/macos/x86_64/lib/libSDL2* >> prebuilt/macos/x86_64/library_info.txt
+        echo "" >> prebuilt/macos/x86_64/library_info.txt
+        echo "=== FreeType ===" >> prebuilt/macos/x86_64/library_info.txt
+        ls -la prebuilt/macos/x86_64/lib/libfreetype* >> prebuilt/macos/x86_64/library_info.txt
+        echo "" >> prebuilt/macos/x86_64/library_info.txt
+        echo "=== cimgui ===" >> prebuilt/macos/x86_64/library_info.txt
+        ls -la prebuilt/macos/x86_64/lib/cimgui* >> prebuilt/macos/x86_64/library_info.txt
+        echo "" >> prebuilt/macos/x86_64/library_info.txt
+        echo "=== LuaJIT ===" >> prebuilt/macos/x86_64/library_info.txt
+        ls -la prebuilt/macos/x86_64/lib/libluajit* >> prebuilt/macos/x86_64/library_info.txt
+    
+    - name: List built libraries
+      run: |
+        echo "=== All library files ==="
+        find prebuilt/macos/x86_64/lib -type f \( -name "*.dylib" -o -name "*.a" \) | sort
+        echo ""
+        echo "=== Header files ==="
+        find prebuilt/macos/x86_64/include -type f -name "*.h" | head -20
+    
+    - name: Create release archive
+      run: |
+        cd prebuilt/macos/x86_64
+        zip -r ../../../gamelibs-macos-x86_64.zip *
+        cd ../../..
+        echo "Archive created: $(ls -lh gamelibs-macos-x86_64.zip)"
+    
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: gamelibs-macos-x86_64
+        path: gamelibs-macos-x86_64.zip
+        retention-days: 7
+
   create-release:
-    needs: [build-ubuntu, build-windows]
+    needs: [build-ubuntu, build-windows, build-macos]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
     name: Create Release
@@ -444,6 +592,11 @@ jobs:
       uses: actions/download-artifact@v4
       with:
         name: gamelibs-windows-x86_64
+    
+    - name: Download macOS artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: gamelibs-macos-x86_64
     
     - name: Generate release notes
       run: |
@@ -467,6 +620,10 @@ jobs:
           - SDL2: DirectX, OpenGL, Vulkan support
           - Dynamic libraries (.dll) and import libraries (.lib)
         
+        - **macOS x86_64** (\`gamelibs-macos-x86_64.zip\`)
+          - SDL2: Metal, OpenGL, Vulkan support
+          - Dynamic libraries (.dylib) and static libraries (.a)
+        
         ### Installation
         1. Download the archive for your platform
         2. Extract to your preferred location
@@ -474,7 +631,7 @@ jobs:
            - \`lib/\` - Compiled libraries
            - \`bin/\` - Runtime binaries (Windows: DLLs)
            - \`include/\` - Header files
-           - \`lib/pkgconfig/\` - pkg-config files (Linux)
+           - \`lib/pkgconfig/\` - pkg-config files (Linux/macOS)
         
         ### Usage
         Set your build system to use:
@@ -494,6 +651,7 @@ jobs:
         files: |
           gamelibs-linux-x86_64.zip
           gamelibs-windows-x86_64.zip
+          gamelibs-macos-x86_64.zip
         draft: false
         prerelease: false
       env:
