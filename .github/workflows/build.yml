@@ -95,29 +95,36 @@ jobs:
         timeout 5 luajit gl.lua || echo "Test completed (expected timeout)"
 
     - name: List built libraries
+      if: matrix.os == 'ubuntu-latest'
       run: |
         echo "=== Built libraries ==="
         find prebuilt/${{ matrix.platform }}/x86_64 -name "*.so" -o -name "*.dylib" -o -name "*.dll" -o -name "*.a" -o -name "*.lib" | sort
       shell: bash
 
     - name: Package libraries
+      if: matrix.os == 'ubuntu-latest'
       run: |
         cd prebuilt/${{ matrix.platform }}/x86_64
-        if [ "${{ matrix.os }}" = "windows-latest" ]; then
-          7z a ../../../gamelibs-${{ matrix.artifact_suffix }}.zip . -r
-        else
-          tar -czf ../../../gamelibs-${{ matrix.artifact_suffix }}.tar.gz .
-        fi
+        tar -czf ../../../gamelibs-${{ matrix.artifact_suffix }}.tar.gz .
         cd ../../..
       shell: bash
 
     - name: Upload artifacts
+      if: matrix.os == 'ubuntu-latest'
       uses: actions/upload-artifact@v4
       with:
         name: gamelibs-${{ matrix.artifact_suffix }}
         path: |
           gamelibs-${{ matrix.artifact_suffix }}.*
         retention-days: 30
+
+    - name: Placeholder for Windows/macOS (TODO)
+      if: matrix.os != 'ubuntu-latest'
+      run: |
+        echo "Windows/macOS builds not yet implemented"
+        echo "Only Linux builds are currently supported"
+        echo "Platform: ${{ matrix.platform }}"
+      shell: bash
 
   # Create release on tag push
   release:

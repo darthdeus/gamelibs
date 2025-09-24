@@ -300,18 +300,16 @@ def main():
     
     # Setup directories
     build_dir = Path("build") / "sdl_image"
-    deps_dir = build_dir / "deps"
     install_dir = Path("prebuilt") / platform_name / "x86_64"
     
     build_dir.mkdir(parents=True, exist_ok=True)
-    deps_dir.mkdir(parents=True, exist_ok=True)
     install_dir.mkdir(parents=True, exist_ok=True)
     
-    # Build dependencies in order
-    build_zlib(build_dir, deps_dir, platform_name)
-    build_libpng(build_dir, deps_dir, platform_name)
-    build_libjpeg(build_dir, deps_dir, platform_name)
-    build_libwebp(build_dir, deps_dir, platform_name)
+    # Build dependencies directly into main install dir so SDL_image can find them
+    build_zlib(build_dir, install_dir, platform_name)
+    build_libpng(build_dir, install_dir, platform_name)
+    build_libjpeg(build_dir, install_dir, platform_name)
+    build_libwebp(build_dir, install_dir, platform_name)
     
     # Build SDL_image
     build_sdl_image(build_dir, install_dir, platform_name)
