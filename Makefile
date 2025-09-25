@@ -138,17 +138,23 @@ download:
 		cut -d '"' -f 4 | \
 		while read url; do \
 			filename=$$(basename $$url); \
-			platform=$$(echo $$filename | sed 's/gamelibs-\(.*\)-x86_64.zip/\1/'); \
-			echo "Downloading $$platform build..."; \
+			if echo $$filename | grep -q "macos-arm64"; then \
+				platform="macos"; \
+				arch="arm64"; \
+			else \
+				platform=$$(echo $$filename | sed 's/gamelibs-\(.*\)-x86_64.zip/\1/'); \
+				arch="x86_64"; \
+			fi; \
+			echo "Downloading $$platform $$arch build..."; \
 			curl -L -o prebuilt/$$filename $$url; \
-			echo "Extracting $$platform build..."; \
-			mkdir -p prebuilt/$$platform/x86_64; \
-			unzip -q -o prebuilt/$$filename -d prebuilt/$$platform/x86_64/; \
+			echo "Extracting $$platform $$arch build..."; \
+			mkdir -p prebuilt/$$platform/$$arch; \
+			unzip -q -o prebuilt/$$filename -d prebuilt/$$platform/$$arch/; \
 			rm prebuilt/$$filename; \
-			echo "✓ $$platform libraries installed"; \
+			echo "✓ $$platform $$arch libraries installed"; \
 		done
 	@echo ""
 	@echo "✓ All libraries downloaded and extracted to prebuilt/"
 	@echo ""
 	@echo "Available libraries:"
-	@ls -la prebuilt/*/x86_64/lib/ 2>/dev/null || echo "No libraries found. Make sure the release has been built."
+	@ls -la prebuilt/*/x86_64/lib/ prebuilt/*/arm64/lib/ 2>/dev/null || echo "No libraries found. Make sure the release has been built."
