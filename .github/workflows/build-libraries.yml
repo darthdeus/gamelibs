@@ -19,10 +19,12 @@ permissions:
   contents: write
 
 jobs:
-  build-ubuntu:
+  # TEMPORARILY DISABLED FOR FASTER SDL_mixer DEBUGGING
+  build-ubuntu-disabled:
+    if: false
     runs-on: ubuntu-latest
     name: Build Ubuntu arm64
-    
+
     steps:
     - uses: actions/checkout@v4
     
@@ -500,11 +502,12 @@ jobs:
         ls -la prebuilt/windows/arm64/lib/lua51* || true
         ls -la prebuilt/windows/arm64/bin/lua* || true
     
-    - name: Build SDL_image
-      shell: bash
-      run: |
-        python build_sdl_image.py
-        echo "✓ SDL_image built with PNG, JPEG, and WebP support"
+    # TEMPORARILY DISABLED FOR FASTER SDL_mixer DEBUGGING
+    # - name: Build SDL_image
+    #   shell: bash
+    #   run: |
+    #     python build_sdl_image.py
+    #     echo "✓ SDL_image built with PNG, JPEG, and WebP support"
     
     - name: Build SDL_mixer
       shell: bash
@@ -561,7 +564,9 @@ jobs:
         path: gamelibs-windows-arm64.zip
         retention-days: 7
 
-  build-macos:
+  # TEMPORARILY DISABLED FOR FASTER SDL_mixer DEBUGGING
+  build-macos-disabled:
+    if: false
     runs-on: macos-latest
     name: Build macOS ARM64
     
@@ -802,7 +807,8 @@ jobs:
         retention-days: 7
 
   create-release:
-    needs: [build-ubuntu, build-windows, build-macos]
+    # TEMPORARILY MODIFIED FOR SDL_mixer DEBUGGING
+    needs: [build-windows]  # Only wait for Windows build
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
     name: Create Release
