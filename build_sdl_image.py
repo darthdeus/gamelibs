@@ -297,11 +297,8 @@ def build_sdl_image(build_dir, install_dir, platform_name):
     print(f"Copying vendored source from {vendored_src} to {sdl_image_src}")
     shutil.copytree(vendored_src, sdl_image_src)
     
-    # Find SDL2
-    if platform_name == "macos":
-        sdl2_dir = Path.cwd() / "prebuilt" / platform_name / "arm64"
-    else:
-        sdl2_dir = Path.cwd() / "prebuilt" / platform_name / "x86_64"
+    # Find SDL2 - use the same architecture directory
+    sdl2_dir = install_dir
     if not sdl2_dir.exists():
         print(f"Error: SDL2 not found at {sdl2_dir}")
         print("Please build SDL2 first using build_sdl2.py")
@@ -370,13 +367,16 @@ def build_sdl_image(build_dir, install_dir, platform_name):
 def main():
     platform_name = get_platform()
     print(f"Building SDL_image for {platform_name}")
-    
+
+    # Determine architecture - check if we're building for ARM64
+    # This is set in GitHub Actions workflows
+    arch = "arm64" if "arm64" in os.environ.get("GITHUB_JOB", "").lower() else "x86_64"
+    if platform_name == "macos":
+        arch = "arm64"  # Always use arm64 for macOS (Apple Silicon)
+
     # Setup directories with absolute paths
     build_dir = Path.cwd() / "build" / "sdl_image"
-    if platform_name == "macos":
-        install_dir = Path.cwd() / "prebuilt" / platform_name / "arm64"
-    else:
-        install_dir = Path.cwd() / "prebuilt" / platform_name / "x86_64"
+    install_dir = Path.cwd() / "prebuilt" / platform_name / arch
     
     build_dir.mkdir(parents=True, exist_ok=True)
     install_dir.mkdir(parents=True, exist_ok=True)
