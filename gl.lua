@@ -371,10 +371,22 @@ if SDL.SDL_Init(bit.bor(SDL.SDL_INIT_VIDEO, SDL.SDL_INIT_TIMER)) < 0 then
     error("Failed to initialize SDL")
 end
 
--- Setup SDL OpenGL attributes
--- Use OpenGL 2.1 for maximum compatibility
-SDL.SDL_GL_SetAttribute(3, 2) -- SDL_GL_CONTEXT_MAJOR_VERSION
-SDL.SDL_GL_SetAttribute(4, 1) -- SDL_GL_CONTEXT_MINOR_VERSION
+-- Setup SDL OpenGL attributes for modern OpenGL
+-- IMPORTANT: These are the CORRECT SDL constants!
+if ffi.os == "OSX" then
+    -- macOS supports OpenGL 4.1 Core Profile
+    SDL.SDL_GL_SetAttribute(17, 4) -- SDL_GL_CONTEXT_MAJOR_VERSION = 17
+    SDL.SDL_GL_SetAttribute(18, 1) -- SDL_GL_CONTEXT_MINOR_VERSION = 18
+    SDL.SDL_GL_SetAttribute(21, 1) -- SDL_GL_CONTEXT_PROFILE_MASK = 21, CORE = 1
+    SDL.SDL_GL_SetAttribute(20, 2) -- SDL_GL_CONTEXT_FLAGS = 20, FORWARD_COMPATIBLE = 2
+else
+    -- Other platforms use OpenGL 3.3 Core Profile
+    SDL.SDL_GL_SetAttribute(17, 3) -- SDL_GL_CONTEXT_MAJOR_VERSION
+    SDL.SDL_GL_SetAttribute(18, 3) -- SDL_GL_CONTEXT_MINOR_VERSION
+    SDL.SDL_GL_SetAttribute(21, 1) -- SDL_GL_CONTEXT_PROFILE_MASK = CORE
+end
+SDL.SDL_GL_SetAttribute(5, 1) -- SDL_GL_DOUBLEBUFFER
+SDL.SDL_GL_SetAttribute(6, 24) -- SDL_GL_DEPTH_SIZE
 
 -- Set hint to prevent window from grabbing focus
 SDL.SDL_SetHint("SDL_HINT_WINDOW_NO_ACTIVATION_WHEN_SHOWN", "1")
@@ -410,12 +422,10 @@ SDL.SDL_GL_SetSwapInterval(1)
 print("Loading OpenGL functions...")
 
 -- Check what OpenGL context we actually got
--- Note: On some systems this may return incorrect values, commenting out for now
--- local major = ffi.new("int[1]")
--- local minor = ffi.new("int[1]")
--- SDL.SDL_GL_GetAttribute(3, major) -- SDL_GL_CONTEXT_MAJOR_VERSION
--- SDL.SDL_GL_GetAttribute(4, minor) -- SDL_GL_CONTEXT_MINOR_VERSION
--- print(string.format("OpenGL Context Version: %d.%d", major[0], minor[0]))
+local glGetString = ffi.cast("const char* (*)(unsigned int)", loadGLFunction("glGetString"))
+local GL_VERSION = 0x1F02
+local version_str = ffi.string(glGetString(GL_VERSION))
+print("OpenGL Version String:", version_str)
 
 glClear = ffi.cast("void (*)(unsigned int)", loadGLFunction("glClear"))
 glClearColor = ffi.cast("void (*)(float, float, float, float)", loadGLFunction("glClearColor"))
@@ -438,6 +448,8 @@ glBufferSubData = ffi.cast("void (*)(unsigned int, long, long, const void*)", lo
 glPixelStorei = ffi.cast("void (*)(unsigned int, int)", loadGLFunction("glPixelStorei"))
 glGenVertexArrays = ffi.cast("void (*)(int, unsigned int*)", loadGLFunction("glGenVertexArrays"))
 glBindVertexArray = ffi.cast("void (*)(unsigned int)", loadGLFunction("glBindVertexArray"))
+
+-- Vertex attribute functions (OpenGL 2.0+)
 glVertexAttribPointer = ffi.cast("void (*)(unsigned int, int, unsigned int, unsigned char, int, const void*)", loadGLFunction("glVertexAttribPointer"))
 glEnableVertexAttribArray = ffi.cast("void (*)(unsigned int)", loadGLFunction("glEnableVertexAttribArray"))
 glGenTextures = ffi.cast("void (*)(int, unsigned int*)", loadGLFunction("glGenTextures"))
@@ -463,7 +475,8 @@ if not imgui.cImGui_ImplSDL2_InitForOpenGL(window, gl_context) then
     error("Failed to initialize ImGui SDL2 backend")
 end
 
-if not imgui.cImGui_ImplOpenGL3_Init("#version 120") then
+local imguiGlslVersion = ffi.os == "OSX" and "#version 150" or "#version 130"
+if not imgui.cImGui_ImplOpenGL3_Init(imguiGlslVersion) then
     error("Failed to initialize ImGui OpenGL3 backend")
 end
 
@@ -509,32 +522,35 @@ if font_loaded then
     ft.FT_Set_Pixel_Sizes(ft_face[0], 0, raster_size[0])
 end
 
--- Shader source code for triangle (OpenGL 2.1 / GLSL 120)
-local vertexShaderSource = [[
-#version 120
-attribute vec3 aPos;
+-- Shader source code for triangle
+local shaderVersion = ffi.os == "OSX" and "#version 410 core" or "#version 330 core"
+
+local vertexShaderSource = shaderVersion .. [[
+
+layout (location = 0) in vec3 aPos;
 void main()
 {
     gl_Position = vec4(aPos.x, aPos.y, aPos.z, 1.0);
 }
 ]]
 
-local fragmentShaderSource = [[
-#version 120
+local fragmentShaderSource = shaderVersion .. [[
+
+out vec4 FragColor;
 void main()
 {
-    gl_FragColor = vec4(1.0, 0.5, 0.2, 1.0);
+    FragColor = vec4(1.0, 0.5, 0.2, 1.0);
 }
 ]]
 
--- Shader source code for text rendering (OpenGL 2.1 / GLSL 120)
+-- Shader source code for text rendering
 -- NOTE: We use Y-up coordinate system (OpenGL default)
 -- Positive Y goes upward, origin at center of screen
 -- Text baseline calculations assume Y-up
-local textVertexShaderSource = [[
-#version 120
-attribute vec4 vertex;
-varying vec2 TexCoord;
+local textVertexShaderSource = shaderVersion .. [[
+
+layout (location = 0) in vec4 vertex;
+out vec2 TexCoord;
 void main()
 {
     gl_Position = vec4(vertex.xy, 0.0, 1.0);
@@ -542,15 +558,16 @@ void main()
 }
 ]]
 
-local textFragmentShaderSource = [[
-#version 120
-varying vec2 TexCoord;
+local textFragmentShaderSource = shaderVersion .. [[
+
+in vec2 TexCoord;
+out vec4 FragColor;
 uniform sampler2D text;
 uniform vec3 textColor;
 void main()
 {
-    vec4 sampled = vec4(1.0, 1.0, 1.0, texture2D(text, TexCoord).r);
-    gl_FragColor = vec4(textColor, 1.0) * sampled;
+    vec4 sampled = vec4(1.0, 1.0, 1.0, texture(text, TexCoord).r);
+    FragColor = vec4(textColor, 1.0) * sampled;
 }
 ]]
 
