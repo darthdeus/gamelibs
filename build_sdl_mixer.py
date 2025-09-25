@@ -180,10 +180,15 @@ def build_flac(build_dir, install_dir, platform_name):
     ]
     
     if platform_name == "windows":
-        cmake_args.extend(["-G", "Visual Studio 17 2022", "-A", "x64"])
+        cmake_args.extend([
+            "-G", "Visual Studio 17 2022", "-A", "x64",
+            # Define FLAC__NO_DLL to build static library without DLL exports
+            "-DCMAKE_C_FLAGS=/DFLAC__NO_DLL",
+            "-DCMAKE_CXX_FLAGS=/DFLAC__NO_DLL"
+        ])
     elif platform_name == "macos":
         cmake_args.append("-DCMAKE_OSX_ARCHITECTURES=arm64")
-    
+
     env = os.environ.copy()
     env["PKG_CONFIG_PATH"] = f"{install_dir.resolve()}/lib/pkgconfig"
     
