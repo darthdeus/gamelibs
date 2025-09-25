@@ -324,7 +324,13 @@ def build_sdl_mixer(build_dir, install_dir, platform_name):
         print("Note: MP3 support disabled (mpg123 not available)")
     
     if platform_name == "windows":
-        cmake_args.extend(["-G", "Visual Studio 17 2022", "-A", "x64"])
+        cmake_args.extend([
+            "-G", "Visual Studio 17 2022",
+            "-A", "x64",
+            # Define FLAC__NO_DLL to use static linking
+            "-DCMAKE_C_FLAGS=/DFLAC__NO_DLL",
+            "-DCMAKE_CXX_FLAGS=/DFLAC__NO_DLL"
+        ])
         # Windows static lib names are different - update library paths
         for i, arg in enumerate(cmake_args):
             if arg.startswith("-DOGG_LIBRARY="):
@@ -347,8 +353,12 @@ def build_sdl_mixer(build_dir, install_dir, platform_name):
     env = os.environ.copy()
     env["PKG_CONFIG_PATH"] = f"{install_dir.resolve()}/lib/pkgconfig:{sdl2_dir.resolve()}/lib/pkgconfig"
 
-    # Don't set CFLAGS/LDFLAGS on Windows as they interfere with Visual Studio
-    if platform_name != "windows":
+    # Platform-specific environment variables
+    if platform_name == "windows":
+        # Define FLAC__NO_DLL to use static linking on Windows
+        env["CFLAGS"] = "/DFLAC__NO_DLL"
+        env["CXXFLAGS"] = "/DFLAC__NO_DLL"
+    else:
         env["CFLAGS"] = f"-I{install_dir.resolve()}/include -I{sdl2_dir.resolve()}/include"
         env["LDFLAGS"] = f"-L{install_dir.resolve()}/lib -L{sdl2_dir.resolve()}/lib"
     
