@@ -368,9 +368,11 @@ def main():
     platform_name = get_platform()
     print(f"Building SDL_image for {platform_name}")
 
-    # All platforms use arm64 directory structure in this project
-    # (even though Ubuntu and Windows build x86_64 binaries)
-    arch = "arm64"
+    # Determine architecture based on platform
+    if platform_name == "macos":
+        arch = "arm64"  # Apple Silicon
+    else:
+        arch = "x86_64"  # Linux and Windows use x86_64
 
     # Setup directories with absolute paths
     build_dir = Path.cwd() / "build" / "sdl_image"
