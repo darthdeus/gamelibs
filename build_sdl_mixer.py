@@ -305,17 +305,8 @@ def build_sdl_mixer(build_dir, install_dir, platform_name):
         "-DCMAKE_BUILD_TYPE=Release"
     ]
 
-    # Disable FLAC on Windows due to linking issues, enable on other platforms
-    if platform_name == "windows":
-        cmake_args.append("-DSDL2MIXER_FLAC=OFF")
-    else:
-        cmake_args.extend([
-            "-DSDL2MIXER_FLAC=ON",
-            "-DSDL2MIXER_FLAC_LIBFLAC=ON",
-            "-DSDL2MIXER_FLAC_LIBFLAC_SHARED=OFF",
-            f"-DFLAC_LIBRARY={install_dir}/lib/libFLAC.a",
-            f"-DFLAC_INCLUDE_DIR={install_dir}/include",
-        ])
+    # Disable FLAC on all platforms to simplify builds
+    cmake_args.append("-DSDL2MIXER_FLAC=OFF")
     
     # Only enable MP3 support if mpg123 was successfully built
     if has_mpg123:
@@ -386,11 +377,8 @@ def main():
     build_libogg(build_dir, install_dir, platform_name)
     build_libvorbis(build_dir, install_dir, platform_name)
 
-    # Skip FLAC on Windows due to linking issues
-    if platform_name != "windows":
-        build_flac(build_dir, install_dir, platform_name)
-    else:
-        print("\n=== Skipping FLAC on Windows (linking issues) ===")
+    # Skip FLAC on all platforms - simplifies builds and avoids linking issues
+    # build_flac(build_dir, install_dir, platform_name)
 
     build_mpg123(build_dir, install_dir, platform_name)
     

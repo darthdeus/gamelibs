@@ -19,9 +19,7 @@ permissions:
   contents: write
 
 jobs:
-  # TEMPORARILY DISABLED FOR FASTER SDL_mixer DEBUGGING
-  build-ubuntu-disabled:
-    if: false
+  build-ubuntu:
     runs-on: ubuntu-latest
     name: Build Ubuntu arm64
 
@@ -56,6 +54,14 @@ jobs:
         # Generate hash of LuaJIT source for cache key
         LUAJIT_HASH=$(find luajit -type f -name '*.c' -o -name '*.h' -o -name 'Makefile' | head -100 | xargs sha256sum | sha256sum | cut -d' ' -f1)
         echo "luajit-hash=${CACHE_VERSION}-${LUAJIT_HASH}${CACHE_SUFFIX}" >> $GITHUB_OUTPUT
+
+        # Generate hash of SDL_image build script for cache key
+        SDL_IMAGE_HASH=$(sha256sum build_sdl_image.py SDL2_image-2.8.2/CMakeLists.txt 2>/dev/null | sha256sum | cut -d' ' -f1)
+        echo "sdl-image-hash=${CACHE_VERSION}-${SDL_IMAGE_HASH}${CACHE_SUFFIX}" >> $GITHUB_OUTPUT
+
+        # Generate hash of SDL_mixer build script for cache key
+        SDL_MIXER_HASH=$(sha256sum build_sdl_mixer.py SDL2_mixer-2.8.0/CMakeLists.txt 2>/dev/null | sha256sum | cut -d' ' -f1)
+        echo "sdl-mixer-hash=${CACHE_VERSION}-${SDL_MIXER_HASH}${CACHE_SUFFIX}" >> $GITHUB_OUTPUT
     
     - name: Cache SDL2 build
       id: cache-sdl2
@@ -241,16 +247,54 @@ jobs:
           echo "✓ LuaJIT built from source"
         fi
         ls -la prebuilt/linux/arm64/lib/libluajit* || true
-    
+
+    - name: Cache SDL_image build
+      id: cache-sdl-image
+      uses: actions/cache@v4
+      with:
+        path: |
+          prebuilt/linux/arm64/lib/libSDL2_image*
+          prebuilt/linux/arm64/include/SDL2/SDL_image.h
+        key: sdl-image-ubuntu-${{ steps.cache-keys.outputs.sdl-image-hash }}
+
     - name: Build SDL_image
+      if: steps.cache-sdl-image.outputs.cache-hit != 'true'
       run: |
         python3 build_sdl_image.py
         echo "✓ SDL_image built with PNG, JPEG, and WebP support"
-    
+
+    - name: SDL_image cache status
+      run: |
+        if [ "${{ steps.cache-sdl-image.outputs.cache-hit }}" = "true" ]; then
+          echo "✓ SDL_image restored from cache"
+        else
+          echo "✓ SDL_image built from source"
+        fi
+        ls -la prebuilt/linux/arm64/lib/libSDL2_image* || true
+
+    - name: Cache SDL_mixer build
+      id: cache-sdl-mixer
+      uses: actions/cache@v4
+      with:
+        path: |
+          prebuilt/linux/arm64/lib/libSDL2_mixer*
+          prebuilt/linux/arm64/include/SDL2/SDL_mixer.h
+        key: sdl-mixer-ubuntu-${{ steps.cache-keys.outputs.sdl-mixer-hash }}
+
     - name: Build SDL_mixer
+      if: steps.cache-sdl-mixer.outputs.cache-hit != 'true'
       run: |
         python3 build_sdl_mixer.py
-        echo "✓ SDL_mixer built with OGG, FLAC, and MP3 support"
+        echo "✓ SDL_mixer built with OGG and MP3 support"
+
+    - name: SDL_mixer cache status
+      run: |
+        if [ "${{ steps.cache-sdl-mixer.outputs.cache-hit }}" = "true" ]; then
+          echo "✓ SDL_mixer restored from cache"
+        else
+          echo "✓ SDL_mixer built from source"
+        fi
+        ls -la prebuilt/linux/arm64/lib/libSDL2_mixer* || true
     
     - name: Create library info file
       run: |
@@ -264,7 +308,7 @@ jobs:
         - cimgui (Dear ImGui C wrapper) with SDL2/OpenGL3 backends
         - LuaJIT 2.1 - Just-In-Time Compiler for Lua
         - SDL_image 2.8.2 - Image loading (PNG, JPEG, WebP support)
-        - SDL_mixer 2.8.0 - Audio mixing (WAV, OGG, FLAC, MP3 support)
+        - SDL_mixer 2.8.0 - Audio mixing (WAV, OGG, MP3 support)
         
         Libraries:
         $(ls -la prebuilt/linux/arm64/lib/)
@@ -337,6 +381,14 @@ jobs:
         # Generate hash of LuaJIT source for cache key
         LUAJIT_HASH=$(find luajit -type f -name '*.c' -o -name '*.h' -o -name 'Makefile' | head -100 | xargs sha256sum | sha256sum | cut -d' ' -f1)
         echo "luajit-hash=${CACHE_VERSION}-${LUAJIT_HASH}${CACHE_SUFFIX}" >> $GITHUB_OUTPUT
+
+        # Generate hash of SDL_image build script for cache key
+        SDL_IMAGE_HASH=$(sha256sum build_sdl_image.py SDL2_image-2.8.2/CMakeLists.txt 2>/dev/null | sha256sum | cut -d' ' -f1)
+        echo "sdl-image-hash=${CACHE_VERSION}-${SDL_IMAGE_HASH}${CACHE_SUFFIX}" >> $GITHUB_OUTPUT
+
+        # Generate hash of SDL_mixer build script for cache key
+        SDL_MIXER_HASH=$(sha256sum build_sdl_mixer.py SDL2_mixer-2.8.0/CMakeLists.txt 2>/dev/null | sha256sum | cut -d' ' -f1)
+        echo "sdl-mixer-hash=${CACHE_VERSION}-${SDL_MIXER_HASH}${CACHE_SUFFIX}" >> $GITHUB_OUTPUT
     
     - name: Cache SDL2 build
       id: cache-sdl2
@@ -501,19 +553,62 @@ jobs:
         fi
         ls -la prebuilt/windows/arm64/lib/lua51* || true
         ls -la prebuilt/windows/arm64/bin/lua* || true
-    
-    # TEMPORARILY DISABLED FOR FASTER SDL_mixer DEBUGGING
-    # - name: Build SDL_image
-    #   shell: bash
-    #   run: |
-    #     python build_sdl_image.py
-    #     echo "✓ SDL_image built with PNG, JPEG, and WebP support"
-    
+
+    - name: Cache SDL_image build
+      id: cache-sdl-image
+      uses: actions/cache@v4
+      with:
+        path: |
+          prebuilt/windows/arm64/lib/SDL2_image*
+          prebuilt/windows/arm64/bin/SDL2_image*
+          prebuilt/windows/arm64/include/SDL2/SDL_image.h
+        key: sdl-image-windows-${{ steps.cache-keys.outputs.sdl-image-hash }}
+
+    - name: Build SDL_image
+      if: steps.cache-sdl-image.outputs.cache-hit != 'true'
+      shell: bash
+      run: |
+        python build_sdl_image.py
+        echo "✓ SDL_image built with PNG, JPEG, and WebP support"
+
+    - name: SDL_image cache status
+      shell: bash
+      run: |
+        if [ "${{ steps.cache-sdl-image.outputs.cache-hit }}" = "true" ]; then
+          echo "✓ SDL_image restored from cache"
+        else
+          echo "✓ SDL_image built from source"
+        fi
+        ls -la prebuilt/windows/arm64/lib/SDL2_image* || true
+        ls -la prebuilt/windows/arm64/bin/SDL2_image* || true
+
+    - name: Cache SDL_mixer build
+      id: cache-sdl-mixer
+      uses: actions/cache@v4
+      with:
+        path: |
+          prebuilt/windows/arm64/lib/SDL2_mixer*
+          prebuilt/windows/arm64/bin/SDL2_mixer*
+          prebuilt/windows/arm64/include/SDL2/SDL_mixer.h
+        key: sdl-mixer-windows-${{ steps.cache-keys.outputs.sdl-mixer-hash }}
+
     - name: Build SDL_mixer
+      if: steps.cache-sdl-mixer.outputs.cache-hit != 'true'
       shell: bash
       run: |
         python build_sdl_mixer.py
-        echo "✓ SDL_mixer built with OGG, FLAC, and MP3 support"
+        echo "✓ SDL_mixer built with OGG and MP3 support"
+
+    - name: SDL_mixer cache status
+      shell: bash
+      run: |
+        if [ "${{ steps.cache-sdl-mixer.outputs.cache-hit }}" = "true" ]; then
+          echo "✓ SDL_mixer restored from cache"
+        else
+          echo "✓ SDL_mixer built from source"
+        fi
+        ls -la prebuilt/windows/arm64/lib/SDL2_mixer* || true
+        ls -la prebuilt/windows/arm64/bin/SDL2_mixer* || true
     
     - name: Create library info file
       shell: bash
@@ -528,7 +623,7 @@ jobs:
         - cimgui (Dear ImGui C wrapper) with SDL2/OpenGL3 backends
         - LuaJIT 2.1 - Just-In-Time Compiler for Lua
         - SDL_image 2.8.2 - Image loading (PNG, JPEG, WebP support)
-        - SDL_mixer 2.8.0 - Audio mixing (WAV, OGG, FLAC, MP3 support)
+        - SDL_mixer 2.8.0 - Audio mixing (WAV, OGG, MP3 support)
         
         Libraries:
         $(ls -la prebuilt/windows/arm64/lib/)
@@ -564,9 +659,7 @@ jobs:
         path: gamelibs-windows-arm64.zip
         retention-days: 7
 
-  # TEMPORARILY DISABLED FOR FASTER SDL_mixer DEBUGGING
-  build-macos-disabled:
-    if: false
+  build-macos:
     runs-on: macos-latest
     name: Build macOS ARM64
     
@@ -743,16 +836,54 @@ jobs:
           echo "✓ LuaJIT built from source"
         fi
         ls -la prebuilt/macos/arm64/lib/libluajit* || true
-    
+
+    - name: Cache SDL_image build
+      id: cache-sdl-image
+      uses: actions/cache@v4
+      with:
+        path: |
+          prebuilt/macos/arm64/lib/libSDL2_image*
+          prebuilt/macos/arm64/include/SDL2/SDL_image.h
+        key: sdl-image-macos-${{ steps.cache-keys.outputs.sdl-image-hash }}
+
     - name: Build SDL_image
+      if: steps.cache-sdl-image.outputs.cache-hit != 'true'
       run: |
         python3 build_sdl_image.py
         echo "✓ SDL_image built with PNG, JPEG, and WebP support"
-    
+
+    - name: SDL_image cache status
+      run: |
+        if [ "${{ steps.cache-sdl-image.outputs.cache-hit }}" = "true" ]; then
+          echo "✓ SDL_image restored from cache"
+        else
+          echo "✓ SDL_image built from source"
+        fi
+        ls -la prebuilt/macos/arm64/lib/libSDL2_image* || true
+
+    - name: Cache SDL_mixer build
+      id: cache-sdl-mixer
+      uses: actions/cache@v4
+      with:
+        path: |
+          prebuilt/macos/arm64/lib/libSDL2_mixer*
+          prebuilt/macos/arm64/include/SDL2/SDL_mixer.h
+        key: sdl-mixer-macos-${{ steps.cache-keys.outputs.sdl-mixer-hash }}
+
     - name: Build SDL_mixer
+      if: steps.cache-sdl-mixer.outputs.cache-hit != 'true'
       run: |
         python3 build_sdl_mixer.py
-        echo "✓ SDL_mixer built with OGG, FLAC, and MP3 support"
+        echo "✓ SDL_mixer built with OGG and MP3 support"
+
+    - name: SDL_mixer cache status
+      run: |
+        if [ "${{ steps.cache-sdl-mixer.outputs.cache-hit }}" = "true" ]; then
+          echo "✓ SDL_mixer restored from cache"
+        else
+          echo "✓ SDL_mixer built from source"
+        fi
+        ls -la prebuilt/macos/arm64/lib/libSDL2_mixer* || true
     
     - name: Create library info file
       run: |
@@ -767,7 +898,7 @@ jobs:
         - cimgui (Dear ImGui C wrapper) with SDL2/OpenGL3 backends
         - LuaJIT Version: 2.1
         - SDL_image 2.8.2 - Image loading (PNG, JPEG, WebP support)
-        - SDL_mixer 2.8.0 - Audio mixing (WAV, OGG, FLAC, MP3 support)
+        - SDL_mixer 2.8.0 - Audio mixing (WAV, OGG, MP3 support)
         
         Library files:
         EOF
@@ -807,8 +938,7 @@ jobs:
         retention-days: 7
 
   create-release:
-    # TEMPORARILY MODIFIED FOR SDL_mixer DEBUGGING
-    needs: [build-windows]  # Only wait for Windows build
+    needs: [build-ubuntu, build-windows, build-macos]  # Only wait for Windows build
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
     name: Create Release
@@ -844,7 +974,7 @@ jobs:
         - **cimgui** - Dear ImGui C wrapper with SDL2/OpenGL3 backends
         - **LuaJIT** 2.1 - Just-In-Time Compiler for Lua
         - **SDL_image** v2.8.2 - Image loading (PNG, JPEG, WebP support)
-        - **SDL_mixer** v2.8.0 - Audio mixing (WAV, OGG, FLAC, MP3 support)
+        - **SDL_mixer** v2.8.0 - Audio mixing (WAV, OGG, MP3 support)
         
         ### Platform Builds
         - **Linux x86_64** (\`gamelibs-linux-x86_64.zip\`)
