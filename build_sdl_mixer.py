@@ -354,12 +354,9 @@ def main():
     platform_name = get_platform()
     print(f"Building SDL_mixer for {platform_name}")
 
-    # Determine architecture
-    # Only macOS uses arm64 (for Apple Silicon), everything else uses x86_64
-    if platform_name == "macos":
-        arch = "arm64"
-    else:
-        arch = "x86_64"
+    # All platforms use arm64 directory structure in this project
+    # (even though Ubuntu and Windows build x86_64 binaries)
+    arch = "arm64"
 
     # Setup directories with absolute paths
     build_dir = Path.cwd() / "build" / "sdl_mixer"
