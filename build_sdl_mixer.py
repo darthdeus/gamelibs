@@ -328,15 +328,16 @@ def build_sdl_mixer(build_dir, install_dir, platform_name):
         # Windows static lib names are different - update library paths
         for i, arg in enumerate(cmake_args):
             if arg.startswith("-DOGG_LIBRARY="):
-                cmake_args[i] = f"-DOGG_LIBRARY={install_dir}/lib/ogg.lib"
+                cmake_args[i] = f"-DOGG_LIBRARY={install_dir.resolve()}/lib/ogg.lib"
             elif arg.startswith("-DVORBIS_LIBRARY="):
-                cmake_args[i] = f"-DVORBIS_LIBRARY={install_dir}/lib/vorbis.lib"
+                cmake_args[i] = f"-DVORBIS_LIBRARY={install_dir.resolve()}/lib/vorbis.lib"
             elif arg.startswith("-DVORBISFILE_LIBRARY="):
-                cmake_args[i] = f"-DVORBISFILE_LIBRARY={install_dir}/lib/vorbisfile.lib"
+                cmake_args[i] = f"-DVORBISFILE_LIBRARY={install_dir.resolve()}/lib/vorbisfile.lib"
             elif arg.startswith("-DFLAC_LIBRARY="):
-                cmake_args[i] = f"-DFLAC_LIBRARY={install_dir}/lib/FLAC.lib"
+                # FLAC needs ogg library as well on Windows
+                cmake_args[i] = f"-DFLAC_LIBRARY={install_dir.resolve()}/lib/FLAC.lib;{install_dir.resolve()}/lib/ogg.lib"
             elif arg.startswith("-DMPG123_LIBRARY=") and has_mpg123:
-                cmake_args[i] = f"-DMPG123_LIBRARY={install_dir}/lib/mpg123.lib"
+                cmake_args[i] = f"-DMPG123_LIBRARY={install_dir.resolve()}/lib/mpg123.lib"
     elif platform_name == "macos":
         cmake_args.extend([
             "-DCMAKE_OSX_ARCHITECTURES=arm64",
@@ -344,9 +345,12 @@ def build_sdl_mixer(build_dir, install_dir, platform_name):
         ])
     
     env = os.environ.copy()
-    env["CFLAGS"] = f"-I{install_dir.resolve()}/include -I{sdl2_dir.resolve()}/include"
-    env["LDFLAGS"] = f"-L{install_dir.resolve()}/lib -L{sdl2_dir.resolve()}/lib"
     env["PKG_CONFIG_PATH"] = f"{install_dir.resolve()}/lib/pkgconfig:{sdl2_dir.resolve()}/lib/pkgconfig"
+
+    # Don't set CFLAGS/LDFLAGS on Windows as they interfere with Visual Studio
+    if platform_name != "windows":
+        env["CFLAGS"] = f"-I{install_dir.resolve()}/include -I{sdl2_dir.resolve()}/include"
+        env["LDFLAGS"] = f"-L{install_dir.resolve()}/lib -L{sdl2_dir.resolve()}/lib"
     
     run_command(cmake_args, cwd=build_path, env=env)
     run_command(["cmake", "--build", ".", "--config", "Release"], cwd=build_path)
