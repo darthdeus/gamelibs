@@ -321,8 +321,6 @@ def build_sdl_mixer(build_dir, install_dir, platform_name):
     
     if platform_name == "windows":
         cmake_args.extend(["-G", "Visual Studio 17 2022", "-A", "x64"])
-    elif platform_name == "macos":
-        cmake_args.append("-DCMAKE_OSX_ARCHITECTURES=arm64")
         # Windows static lib names are different - update library paths
         for i, arg in enumerate(cmake_args):
             if arg.startswith("-DOGG_LIBRARY="):
