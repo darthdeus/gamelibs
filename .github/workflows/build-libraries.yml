@@ -432,7 +432,7 @@ jobs:
           -G "Visual Studio 17 2022" ^
           -A x64 ^
           -DCMAKE_BUILD_TYPE=Release ^
-          -DCMAKE_INSTALL_PREFIX=%CD%\..\..\prebuilt\windows\arm64 ^
+          -DCMAKE_INSTALL_PREFIX=%CD%\..\..\prebuilt\windows\x86_64 ^
           -DSDL_SHARED=ON ^
           -DSDL_STATIC=ON
         cmake --build . --config Release --parallel
@@ -458,7 +458,7 @@ jobs:
           -G "Visual Studio 17 2022" ^
           -A x64 ^
           -DCMAKE_BUILD_TYPE=Release ^
-          -DCMAKE_INSTALL_PREFIX=%CD%\..\..\prebuilt\windows\arm64 ^
+          -DCMAKE_INSTALL_PREFIX=%CD%\..\..\prebuilt\windows\x86_64 ^
           -DBUILD_SHARED_LIBS=ON ^
           -DFT_DISABLE_HARFBUZZ=ON ^
           -DFT_DISABLE_BROTLI=ON ^
@@ -500,8 +500,8 @@ jobs:
       shell: cmd
       run: |
         python build_imgui.py ^
-          %cd%\prebuilt\windows\arm64 ^
-          %cd%\prebuilt\windows\arm64
+          %cd%\prebuilt\windows\x86_64 ^
+          %cd%\prebuilt\windows\x86_64
     
     - name: cimgui cache status
       shell: bash
@@ -531,15 +531,15 @@ jobs:
       run: |
         cd luajit\src
         call msvcbuild.bat
-        xcopy luajit.exe ..\..\prebuilt\windows\arm64\bin\ /Y
-        xcopy lua51.dll ..\..\prebuilt\windows\arm64\bin\ /Y
-        xcopy lua51.lib ..\..\prebuilt\windows\arm64\lib\ /Y
-        xcopy luajit.h ..\..\prebuilt\windows\arm64\include\ /Y
-        xcopy lua.h ..\..\prebuilt\windows\arm64\include\ /Y
-        xcopy lauxlib.h ..\..\prebuilt\windows\arm64\include\ /Y
-        xcopy lualib.h ..\..\prebuilt\windows\arm64\include\ /Y
-        xcopy luaconf.h ..\..\prebuilt\windows\arm64\include\ /Y
-        xcopy lua.hpp ..\..\prebuilt\windows\arm64\include\ /Y
+        xcopy luajit.exe ..\..\prebuilt\windows\x86_64\bin\ /Y
+        xcopy lua51.dll ..\..\prebuilt\windows\x86_64\bin\ /Y
+        xcopy lua51.lib ..\..\prebuilt\windows\x86_64\lib\ /Y
+        xcopy luajit.h ..\..\prebuilt\windows\x86_64\include\ /Y
+        xcopy lua.h ..\..\prebuilt\windows\x86_64\include\ /Y
+        xcopy lauxlib.h ..\..\prebuilt\windows\x86_64\include\ /Y
+        xcopy lualib.h ..\..\prebuilt\windows\x86_64\include\ /Y
+        xcopy luaconf.h ..\..\prebuilt\windows\x86_64\include\ /Y
+        xcopy lua.hpp ..\..\prebuilt\windows\x86_64\include\ /Y
         cd ..\..
         echo LuaJIT built and installed
     
@@ -615,7 +615,7 @@ jobs:
       run: |
         cat > prebuilt/windows/x86_64/library_info.txt << EOF
         Built on: $(date)
-        Platform: Windows arm64
+        Platform: Windows x86_64
         
         Libraries included:
         - SDL2 Version: 2.32.4
