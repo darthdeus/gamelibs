@@ -180,12 +180,7 @@ def build_flac(build_dir, install_dir, platform_name):
     ]
     
     if platform_name == "windows":
-        cmake_args.extend([
-            "-G", "Visual Studio 17 2022", "-A", "x64",
-            # Define FLAC__NO_DLL to build static library without DLL exports
-            "-DCMAKE_C_FLAGS=/DFLAC__NO_DLL",
-            "-DCMAKE_CXX_FLAGS=/DFLAC__NO_DLL"
-        ])
+        cmake_args.extend(["-G", "Visual Studio 17 2022", "-A", "x64"])
     elif platform_name == "macos":
         cmake_args.append("-DCMAKE_OSX_ARCHITECTURES=arm64")
 
@@ -298,9 +293,6 @@ def build_sdl_mixer(build_dir, install_dir, platform_name):
         "-DSDL2MIXER_WAV=ON",
         "-DSDL2MIXER_OGG=ON",
         "-DSDL2MIXER_OGG_SHARED=OFF",
-        "-DSDL2MIXER_FLAC=ON",
-        "-DSDL2MIXER_FLAC_LIBFLAC=ON",
-        "-DSDL2MIXER_FLAC_LIBFLAC_SHARED=OFF",
         "-DSDL2MIXER_MOD=OFF",  # Disable MOD support (no modplug/xmp)
         "-DSDL2MIXER_MIDI=OFF",  # Disable MIDI for now
         "-DSDL2MIXER_OPUS=OFF",  # Disable Opus for now
@@ -310,10 +302,20 @@ def build_sdl_mixer(build_dir, install_dir, platform_name):
         f"-DVORBIS_LIBRARY={install_dir}/lib/libvorbis.a",
         f"-DVORBISFILE_LIBRARY={install_dir}/lib/libvorbisfile.a",
         f"-DVORBIS_INCLUDE_DIR={install_dir}/include",
-        f"-DFLAC_LIBRARY={install_dir}/lib/libFLAC.a",
-        f"-DFLAC_INCLUDE_DIR={install_dir}/include",
         "-DCMAKE_BUILD_TYPE=Release"
     ]
+
+    # Disable FLAC on Windows due to linking issues, enable on other platforms
+    if platform_name == "windows":
+        cmake_args.append("-DSDL2MIXER_FLAC=OFF")
+    else:
+        cmake_args.extend([
+            "-DSDL2MIXER_FLAC=ON",
+            "-DSDL2MIXER_FLAC_LIBFLAC=ON",
+            "-DSDL2MIXER_FLAC_LIBFLAC_SHARED=OFF",
+            f"-DFLAC_LIBRARY={install_dir}/lib/libFLAC.a",
+            f"-DFLAC_INCLUDE_DIR={install_dir}/include",
+        ])
     
     # Only enable MP3 support if mpg123 was successfully built
     if has_mpg123:
@@ -331,10 +333,7 @@ def build_sdl_mixer(build_dir, install_dir, platform_name):
     if platform_name == "windows":
         cmake_args.extend([
             "-G", "Visual Studio 17 2022",
-            "-A", "x64",
-            # Define FLAC__NO_DLL to use static linking
-            "-DCMAKE_C_FLAGS=/DFLAC__NO_DLL",
-            "-DCMAKE_CXX_FLAGS=/DFLAC__NO_DLL"
+            "-A", "x64"
         ])
         # Windows static lib names are different - update library paths
         for i, arg in enumerate(cmake_args):
@@ -344,9 +343,6 @@ def build_sdl_mixer(build_dir, install_dir, platform_name):
                 cmake_args[i] = f"-DVORBIS_LIBRARY={install_dir.resolve()}/lib/vorbis.lib"
             elif arg.startswith("-DVORBISFILE_LIBRARY="):
                 cmake_args[i] = f"-DVORBISFILE_LIBRARY={install_dir.resolve()}/lib/vorbisfile.lib"
-            elif arg.startswith("-DFLAC_LIBRARY="):
-                # FLAC needs ogg library as well on Windows
-                cmake_args[i] = f"-DFLAC_LIBRARY={install_dir.resolve()}/lib/FLAC.lib;{install_dir.resolve()}/lib/ogg.lib"
             elif arg.startswith("-DMPG123_LIBRARY=") and has_mpg123:
                 cmake_args[i] = f"-DMPG123_LIBRARY={install_dir.resolve()}/lib/mpg123.lib"
     elif platform_name == "macos":
@@ -359,11 +355,7 @@ def build_sdl_mixer(build_dir, install_dir, platform_name):
     env["PKG_CONFIG_PATH"] = f"{install_dir.resolve()}/lib/pkgconfig:{sdl2_dir.resolve()}/lib/pkgconfig"
 
     # Platform-specific environment variables
-    if platform_name == "windows":
-        # Define FLAC__NO_DLL to use static linking on Windows
-        env["CFLAGS"] = "/DFLAC__NO_DLL"
-        env["CXXFLAGS"] = "/DFLAC__NO_DLL"
-    else:
+    if platform_name != "windows":
         env["CFLAGS"] = f"-I{install_dir.resolve()}/include -I{sdl2_dir.resolve()}/include"
         env["LDFLAGS"] = f"-L{install_dir.resolve()}/lib -L{sdl2_dir.resolve()}/lib"
     
@@ -393,7 +385,13 @@ def main():
     # Build dependencies directly into main install dir so SDL_mixer can find them
     build_libogg(build_dir, install_dir, platform_name)
     build_libvorbis(build_dir, install_dir, platform_name)
-    build_flac(build_dir, install_dir, platform_name)
+
+    # Skip FLAC on Windows due to linking issues
+    if platform_name != "windows":
+        build_flac(build_dir, install_dir, platform_name)
+    else:
+        print("\n=== Skipping FLAC on Windows (linking issues) ===")
+
     build_mpg123(build_dir, install_dir, platform_name)
     
     # Build SDL_mixer
