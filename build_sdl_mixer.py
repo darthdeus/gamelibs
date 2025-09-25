@@ -67,7 +67,11 @@ def run_command(cmd, cwd=None, env=None):
     print(f"Running: {' '.join(cmd)}")
     result = subprocess.run(cmd, cwd=cwd, env=env, capture_output=True, text=True)
     if result.returncode != 0:
-        print(f"Error: {result.stderr}")
+        print(f"Command failed with exit code {result.returncode}")
+        if result.stdout:
+            print(f"STDOUT:\n{result.stdout}")
+        if result.stderr:
+            print(f"STDERR:\n{result.stderr}")
         sys.exit(1)
     return result
 
