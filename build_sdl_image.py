@@ -93,7 +93,7 @@ def build_zlib(build_dir, install_dir, platform_name):
         run_command([
             "cmake", "..",
             f"-DCMAKE_INSTALL_PREFIX={install_dir}",
-            "-DCMAKE_BUILD_TYPE=Release"
+            "-DCMAKE_BUILD_TYPE=RelWithDebInfo"
         ], cwd=build_path)
         run_command(["cmake", "--build", ".", "--config", "Release"], cwd=build_path)
         run_command(["cmake", "--install", "."], cwd=build_path)
@@ -170,7 +170,7 @@ def build_libpng(build_dir, install_dir, platform_name):
             f"-DZLIB_ROOT={install_dir}",
             "-DPNG_SHARED=OFF",
             "-DPNG_STATIC=ON",
-            "-DCMAKE_BUILD_TYPE=Release"
+            "-DCMAKE_BUILD_TYPE=RelWithDebInfo"
         ], cwd=build_path)
         run_command(["cmake", "--build", ".", "--config", "Release"], cwd=build_path)
         run_command(["cmake", "--install", "."], cwd=build_path)

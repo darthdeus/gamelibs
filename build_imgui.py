@@ -253,7 +253,7 @@ def build_library():
         
         if IS_WINDOWS:
             obj = src.replace(".cpp", ".obj").replace("/", "_")
-            cmd = [CXX, "/c", src, f"/Fo{obj}", "/O2", "/EHsc"]
+            cmd = [CXX, "/c", src, f"/Fo{obj}", "/O2", "/Zi", "/EHsc"]
             cmd += ["/I.", "/Iimgui", "/Iimgui/backends"]
             
             # Add SDL2 include paths
@@ -264,7 +264,7 @@ def build_library():
             cmd += EXTRA_CFLAGS
         else:
             obj = src.replace(".cpp", ".o").replace("/", "_")
-            cmd = [CXX, "-O2", "-fPIC", "-c", src, "-o", obj]
+            cmd = [CXX, "-O2", "-g", "-fPIC", "-c", src, "-o", obj]
             cmd += ["-I.", "-Iimgui", "-Iimgui/backends"]
             
             # Add SDL2 include paths
@@ -290,7 +290,7 @@ def build_library():
         output = f"cimgui_complete{LIB_EXT}"
         
         if IS_WINDOWS:
-            cmd = ["link.exe", "/DLL", f"/OUT:{output}"] + obj_files
+            cmd = ["link.exe", "/DLL", "/DEBUG", f"/OUT:{output}"] + obj_files
             cmd += EXTRA_LDFLAGS
         else:
             cmd = [CXX, "-shared"] + obj_files + ["-o", output]

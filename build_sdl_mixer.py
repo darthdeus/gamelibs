@@ -215,7 +215,7 @@ def build_mpg123(build_dir, install_dir, platform_name):
                 "cmake", "..",
                 f"-DCMAKE_INSTALL_PREFIX={install_dir}",
                 "-DBUILD_SHARED_LIBS=OFF",
-                "-DCMAKE_BUILD_TYPE=Release",
+                "-DCMAKE_BUILD_TYPE=RelWithDebInfo",
                 "-DCMAKE_POLICY_VERSION_MINIMUM=3.5",  # Allow older CMakeLists.txt
                 "-G", "Visual Studio 17 2022", "-A", "x64"
             ]
