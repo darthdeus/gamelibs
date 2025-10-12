@@ -75,6 +75,26 @@ set(SOLOUD_SOURCES
     src/audiosource/wav/soloud_wav.cpp
     src/audiosource/wav/soloud_wavstream.cpp
     src/audiosource/wav/stb_vorbis.c
+    src/audiosource/monotone/soloud_monotone.cpp
+    src/audiosource/noise/soloud_noise.cpp
+    src/audiosource/openmpt/soloud_openmpt.cpp
+    src/audiosource/openmpt/soloud_openmpt_dll.c
+    src/audiosource/sfxr/soloud_sfxr.cpp
+    src/audiosource/speech/darray.cpp
+    src/audiosource/speech/klatt.cpp
+    src/audiosource/speech/resonator.cpp
+    src/audiosource/speech/soloud_speech.cpp
+    src/audiosource/speech/tts.cpp
+    src/audiosource/tedsid/sid.cpp
+    src/audiosource/tedsid/soloud_tedsid.cpp
+    src/audiosource/tedsid/ted.cpp
+    src/audiosource/vic/soloud_vic.cpp
+    src/audiosource/vizsn/soloud_vizsn.cpp
+)
+
+# C API
+set(SOLOUD_C_API
+    src/c_api/soloud_c.cpp
 )
 
 # Filter modules
@@ -127,6 +147,7 @@ add_definitions(-DWITH_COREAUDIO)
 add_library(soloud SHARED
     ${SOLOUD_CORE_SOURCES}
     ${SOLOUD_SOURCES}
+    ${SOLOUD_C_API}
     ${SOLOUD_FILTERS}
     ${SOLOUD_BACKEND}
 )
