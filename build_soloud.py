@@ -9,13 +9,11 @@ import sys
 import shutil
 import subprocess
 import platform
-import urllib.request
-import zipfile
 from pathlib import Path
 
 # Version configuration
-SOLOUD_VERSION = "20200207"  # Latest stable release
-SOLOUD_URL = f"https://github.com/jarikomppa/soloud/archive/refs/tags/{SOLOUD_VERSION}.zip"
+SOLOUD_VERSION = "RELEASE_20200207"
+# SoLoud is now vendored in the repository
 
 def get_platform():
     """Detect the current platform"""
@@ -25,18 +23,6 @@ def get_platform():
     elif system == "windows":
         return "windows"
     return "linux"
-
-def download_file(url, dest):
-    """Download a file from URL to destination"""
-    print(f"Downloading {url}...")
-    urllib.request.urlretrieve(url, dest)
-    print(f"Downloaded to {dest}")
-
-def extract_archive(archive_path, dest_dir):
-    """Extract zip archive"""
-    print(f"Extracting {archive_path}...")
-    with zipfile.ZipFile(archive_path, 'r') as zip_ref:
-        zip_ref.extractall(dest_dir)
 
 def run_command(cmd, cwd=None, env=None):
     """Run a shell command and check for errors"""
@@ -180,16 +166,20 @@ def build_soloud(build_dir, install_dir, platform_name):
     """Build SoLoud"""
     print("\n=== Building SoLoud ===")
 
-    # Download and extract SoLoud
-    soloud_archive = build_dir / f"soloud-{SOLOUD_VERSION}.zip"
+    # Use vendored source
+    vendored_src = Path(f"soloud-{SOLOUD_VERSION}")
     soloud_src = build_dir / f"soloud-{SOLOUD_VERSION}"
 
-    if not soloud_archive.exists():
-        download_file(SOLOUD_URL, soloud_archive)
+    if not vendored_src.exists():
+        print(f"Error: Vendored SoLoud source not found at {vendored_src}")
+        print(f"Please ensure soloud-{SOLOUD_VERSION} directory exists in the project root")
+        sys.exit(1)
 
+    # Copy vendored source to build directory
     if soloud_src.exists():
         shutil.rmtree(soloud_src)
-    extract_archive(soloud_archive, build_dir)
+    print(f"Copying vendored source from {vendored_src} to {soloud_src}")
+    shutil.copytree(vendored_src, soloud_src)
 
     # Create CMakeLists.txt for building
     create_cmake_lists(soloud_src, platform_name)
