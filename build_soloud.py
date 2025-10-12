@@ -83,7 +83,6 @@ set(SOLOUD_FILTERS
     src/filter/soloud_biquadresonantfilter.cpp
     src/filter/soloud_dcremovalfilter.cpp
     src/filter/soloud_echofilter.cpp
-    src/filter/soloud_eqfilter.cpp
     src/filter/soloud_fftfilter.cpp
     src/filter/soloud_flangerfilter.cpp
     src/filter/soloud_freeverbfilter.cpp
@@ -118,7 +117,8 @@ set(SOLOUD_BACKEND
 )
 find_library(COREAUDIO_LIBRARY CoreAudio REQUIRED)
 find_library(AUDIOUNIT_LIBRARY AudioUnit REQUIRED)
-set(BACKEND_LIBS ${COREAUDIO_LIBRARY} ${AUDIOUNIT_LIBRARY})
+find_library(AUDIOTOOLBOX_LIBRARY AudioToolbox REQUIRED)
+set(BACKEND_LIBS ${COREAUDIO_LIBRARY} ${AUDIOUNIT_LIBRARY} ${AUDIOTOOLBOX_LIBRARY})
 add_definitions(-DWITH_COREAUDIO)
 """
 
