@@ -25,32 +25,32 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
-    
+
     - name: Generate cache keys
       id: cache-keys
       run: |
         # Cache version - increment this to force cache rebuild
         CACHE_VERSION="v1"
-        
+
         # Add manual cache clear suffix if requested
         if [ "${{ github.event.inputs.clear_cache }}" = "true" ]; then
           CACHE_SUFFIX="-cleared-$(date +%s)"
         else
           CACHE_SUFFIX=""
         fi
-        
+
         # Generate hash of SDL2 source for cache key
         SDL2_HASH=$(find SDL2-2.32.4 -type f -name '*.c' -o -name '*.h' -o -name 'CMakeLists.txt' | head -100 | xargs sha256sum | sha256sum | cut -d' ' -f1)
         echo "sdl2-hash=${CACHE_VERSION}-${SDL2_HASH}${CACHE_SUFFIX}" >> $GITHUB_OUTPUT
-        
+
         # Generate hash of FreeType source for cache key
         FT_HASH=$(find freetype-2.14.1 -type f -name '*.c' -o -name '*.h' -o -name 'CMakeLists.txt' | head -100 | xargs sha256sum | sha256sum | cut -d' ' -f1)
         echo "freetype-hash=${CACHE_VERSION}-${FT_HASH}${CACHE_SUFFIX}" >> $GITHUB_OUTPUT
-        
+
         # Generate hash of cimgui source for cache key
         CIMGUI_HASH=$(find cimgui imgui_backends -type f -name '*.cpp' -o -name '*.h' -o -name '*.py' 2>/dev/null | xargs sha256sum 2>/dev/null | sha256sum | cut -d' ' -f1)
         echo "cimgui-hash=${CACHE_VERSION}-${CIMGUI_HASH}${CACHE_SUFFIX}" >> $GITHUB_OUTPUT
-        
+
         # Generate hash of LuaJIT source for cache key
         LUAJIT_HASH=$(find luajit -type f -name '*.c' -o -name '*.h' -o -name 'Makefile' | head -100 | xargs sha256sum | sha256sum | cut -d' ' -f1)
         echo "luajit-hash=${CACHE_VERSION}-${LUAJIT_HASH}${CACHE_SUFFIX}" >> $GITHUB_OUTPUT
@@ -62,6 +62,10 @@ jobs:
         # Generate hash of SDL_mixer build script for cache key
         SDL_MIXER_HASH=$(sha256sum build_sdl_mixer.py SDL2_mixer-2.8.0/CMakeLists.txt 2>/dev/null | sha256sum | cut -d' ' -f1)
         echo "sdl-mixer-hash=${CACHE_VERSION}-${SDL_MIXER_HASH}${CACHE_SUFFIX}" >> $GITHUB_OUTPUT
+
+        # Generate hash of SoLoud build script for cache key
+        SOLOUD_HASH=$(sha256sum build_soloud.py 2>/dev/null | sha256sum | cut -d' ' -f1)
+        echo "soloud-hash=${CACHE_VERSION}-${SOLOUD_HASH}${CACHE_SUFFIX}" >> $GITHUB_OUTPUT
     
     - name: Cache SDL2 build
       id: cache-sdl2
@@ -295,13 +299,37 @@ jobs:
           echo "✓ SDL_mixer built from source"
         fi
         ls -la prebuilt/linux/x86_64/lib/libSDL2_mixer* || true
-    
+
+    - name: Cache SoLoud build
+      id: cache-soloud
+      uses: actions/cache@v4
+      with:
+        path: |
+          prebuilt/linux/x86_64/lib/libsoloud*
+          prebuilt/linux/x86_64/include/soloud*.h
+        key: soloud-ubuntu-${{ steps.cache-keys.outputs.soloud-hash }}
+
+    - name: Build SoLoud
+      if: steps.cache-soloud.outputs.cache-hit != 'true'
+      run: |
+        python3 build_soloud.py
+        echo "✓ SoLoud built with ALSA backend"
+
+    - name: SoLoud cache status
+      run: |
+        if [ "${{ steps.cache-soloud.outputs.cache-hit }}" = "true" ]; then
+          echo "✓ SoLoud restored from cache"
+        else
+          echo "✓ SoLoud built from source"
+        fi
+        ls -la prebuilt/linux/x86_64/lib/libsoloud* || true
+
     - name: Create library info file
       run: |
         cat > prebuilt/linux/x86_64/library_info.txt << EOF
         Built on: $(date)
         Platform: Ubuntu $(lsb_release -rs)
-        
+
         Libraries included:
         - SDL2 Version: 2.32.4
         - FreeType Version: 2.14.1
@@ -309,6 +337,7 @@ jobs:
         - LuaJIT 2.1 - Just-In-Time Compiler for Lua
         - SDL_image 2.8.2 - Image loading (PNG, JPEG, WebP support)
         - SDL_mixer 2.8.0 - Audio mixing (WAV, OGG, MP3 support)
+        - SoLoud 20200207 - Portable audio engine with ALSA backend
         
         Libraries:
         $(ls -la prebuilt/linux/x86_64/lib/)
@@ -343,41 +372,41 @@ jobs:
   build-windows:
     runs-on: windows-latest
     name: Build Windows x86_64
-    
+
     steps:
     - uses: actions/checkout@v4
-    
+
     - name: Setup Python
       uses: actions/setup-python@v4
       with:
         python-version: '3.x'
-    
+
     - name: Generate cache keys
       id: cache-keys
       shell: bash
       run: |
         # Cache version - increment this to force cache rebuild
         CACHE_VERSION="v1"
-        
+
         # Add manual cache clear suffix if requested
         if [ "${{ github.event.inputs.clear_cache }}" = "true" ]; then
           CACHE_SUFFIX="-cleared-$(date +%s)"
         else
           CACHE_SUFFIX=""
         fi
-        
+
         # Generate hash of SDL2 source for cache key
         SDL2_HASH=$(find SDL2-2.32.4 -type f -name '*.c' -o -name '*.h' -o -name 'CMakeLists.txt' | head -100 | xargs sha256sum | sha256sum | cut -d' ' -f1)
         echo "sdl2-hash=${CACHE_VERSION}-${SDL2_HASH}${CACHE_SUFFIX}" >> $GITHUB_OUTPUT
-        
+
         # Generate hash of FreeType source for cache key
         FT_HASH=$(find freetype-2.14.1 -type f -name '*.c' -o -name '*.h' -o -name 'CMakeLists.txt' | head -100 | xargs sha256sum | sha256sum | cut -d' ' -f1)
         echo "freetype-hash=${CACHE_VERSION}-${FT_HASH}${CACHE_SUFFIX}" >> $GITHUB_OUTPUT
-        
+
         # Generate hash of cimgui source for cache key
         CIMGUI_HASH=$(find cimgui -type f -name '*.cpp' -o -name '*.h' -o -name 'CMakeLists.txt' | head -100 | xargs sha256sum | sha256sum | cut -d' ' -f1)
         echo "cimgui-hash=${CACHE_VERSION}-${CIMGUI_HASH}${CACHE_SUFFIX}" >> $GITHUB_OUTPUT
-        
+
         # Generate hash of LuaJIT source for cache key
         LUAJIT_HASH=$(find luajit -type f -name '*.c' -o -name '*.h' -o -name 'Makefile' | head -100 | xargs sha256sum | sha256sum | cut -d' ' -f1)
         echo "luajit-hash=${CACHE_VERSION}-${LUAJIT_HASH}${CACHE_SUFFIX}" >> $GITHUB_OUTPUT
@@ -389,6 +418,10 @@ jobs:
         # Generate hash of SDL_mixer build script for cache key
         SDL_MIXER_HASH=$(sha256sum build_sdl_mixer.py SDL2_mixer-2.8.0/CMakeLists.txt 2>/dev/null | sha256sum | cut -d' ' -f1)
         echo "sdl-mixer-hash=${CACHE_VERSION}-${SDL_MIXER_HASH}${CACHE_SUFFIX}" >> $GITHUB_OUTPUT
+
+        # Generate hash of SoLoud build script for cache key
+        SOLOUD_HASH=$(sha256sum build_soloud.py 2>/dev/null | sha256sum | cut -d' ' -f1)
+        echo "soloud-hash=${CACHE_VERSION}-${SOLOUD_HASH}${CACHE_SUFFIX}" >> $GITHUB_OUTPUT
     
     - name: Cache SDL2 build
       id: cache-sdl2
@@ -609,14 +642,42 @@ jobs:
         fi
         ls -la prebuilt/windows/x86_64/lib/SDL2_mixer* || true
         ls -la prebuilt/windows/x86_64/bin/SDL2_mixer* || true
-    
+
+    - name: Cache SoLoud build
+      id: cache-soloud
+      uses: actions/cache@v4
+      with:
+        path: |
+          prebuilt/windows/x86_64/lib/soloud*
+          prebuilt/windows/x86_64/bin/soloud*
+          prebuilt/windows/x86_64/include/soloud*.h
+        key: soloud-windows-${{ steps.cache-keys.outputs.soloud-hash }}
+
+    - name: Build SoLoud
+      if: steps.cache-soloud.outputs.cache-hit != 'true'
+      shell: bash
+      run: |
+        python build_soloud.py
+        echo "✓ SoLoud built with WinMM backend"
+
+    - name: SoLoud cache status
+      shell: bash
+      run: |
+        if [ "${{ steps.cache-soloud.outputs.cache-hit }}" = "true" ]; then
+          echo "✓ SoLoud restored from cache"
+        else
+          echo "✓ SoLoud built from source"
+        fi
+        ls -la prebuilt/windows/x86_64/lib/soloud* || true
+        ls -la prebuilt/windows/x86_64/bin/soloud* || true
+
     - name: Create library info file
       shell: bash
       run: |
         cat > prebuilt/windows/x86_64/library_info.txt << EOF
         Built on: $(date)
         Platform: Windows x86_64
-        
+
         Libraries included:
         - SDL2 Version: 2.32.4
         - FreeType Version: 2.14.1
@@ -624,6 +685,7 @@ jobs:
         - LuaJIT 2.1 - Just-In-Time Compiler for Lua
         - SDL_image 2.8.2 - Image loading (PNG, JPEG, WebP support)
         - SDL_mixer 2.8.0 - Audio mixing (WAV, OGG, MP3 support)
+        - SoLoud 20200207 - Portable audio engine with WinMM backend
         
         Libraries:
         $(ls -la prebuilt/windows/x86_64/lib/)
@@ -699,7 +761,11 @@ jobs:
         # Generate hash of LuaJIT source for cache key
         LUAJIT_HASH=$(find luajit -type f -name '*.c' -o -name '*.h' -o -name 'Makefile' | head -100 | xargs shasum -a 256 | shasum -a 256 | cut -d' ' -f1)
         echo "luajit-hash=${CACHE_VERSION}-${LUAJIT_HASH}${CACHE_SUFFIX}" >> $GITHUB_OUTPUT
-    
+
+        # Generate hash of SoLoud build script for cache key
+        SOLOUD_HASH=$(shasum -a 256 build_soloud.py 2>/dev/null | shasum -a 256 | cut -d' ' -f1)
+        echo "soloud-hash=${CACHE_VERSION}-${SOLOUD_HASH}${CACHE_SUFFIX}" >> $GITHUB_OUTPUT
+
     - name: Setup build environment
       run: |
         brew install cmake ninja pkg-config
@@ -884,14 +950,38 @@ jobs:
           echo "✓ SDL_mixer built from source"
         fi
         ls -la prebuilt/macos/arm64/lib/libSDL2_mixer* || true
-    
+
+    - name: Cache SoLoud build
+      id: cache-soloud
+      uses: actions/cache@v4
+      with:
+        path: |
+          prebuilt/macos/arm64/lib/libsoloud*
+          prebuilt/macos/arm64/include/soloud*.h
+        key: soloud-macos-${{ steps.cache-keys.outputs.soloud-hash }}
+
+    - name: Build SoLoud
+      if: steps.cache-soloud.outputs.cache-hit != 'true'
+      run: |
+        python3 build_soloud.py
+        echo "✓ SoLoud built with CoreAudio backend"
+
+    - name: SoLoud cache status
+      run: |
+        if [ "${{ steps.cache-soloud.outputs.cache-hit }}" = "true" ]; then
+          echo "✓ SoLoud restored from cache"
+        else
+          echo "✓ SoLoud built from source"
+        fi
+        ls -la prebuilt/macos/arm64/lib/libsoloud* || true
+
     - name: Create library info file
       run: |
         cat > prebuilt/macos/arm64/library_info.txt << EOF
         Built on: $(date)
         Platform: macOS $(sw_vers -productVersion)
         Architecture: arm64
-        
+
         Libraries included:
         - SDL2 Version: 2.32.4
         - FreeType Version: 2.14.1
@@ -899,6 +989,7 @@ jobs:
         - LuaJIT Version: 2.1
         - SDL_image 2.8.2 - Image loading (PNG, JPEG, WebP support)
         - SDL_mixer 2.8.0 - Audio mixing (WAV, OGG, MP3 support)
+        - SoLoud 20200207 - Portable audio engine with CoreAudio backend
         
         Library files:
         EOF
@@ -975,6 +1066,7 @@ jobs:
         - **LuaJIT** 2.1 - Just-In-Time Compiler for Lua
         - **SDL_image** v2.8.2 - Image loading (PNG, JPEG, WebP support)
         - **SDL_mixer** v2.8.0 - Audio mixing (WAV, OGG, MP3 support)
+        - **SoLoud** 20200207 - Portable audio engine (ALSA/WinMM/CoreAudio backends)
         
         ### Platform Builds
         - **Linux x86_64** (\`gamelibs-linux-x86_64.zip\`)
