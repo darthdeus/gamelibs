@@ -222,7 +222,7 @@ jobs:
         else
           echo "✓ cimgui built from source"
         fi
-        ls -la prebuilt/linux/x86_64/lib/cimgui* || true
+        ls -la prebuilt/linux/x86_64/lib/libcimgui* || true
     
     - name: Cache LuaJIT
       id: cache-luajit
@@ -875,8 +875,8 @@ jobs:
         else
           echo "✓ cimgui built from source"
         fi
-        ls -la prebuilt/macos/arm64/lib/cimgui* || true
-    
+        ls -la prebuilt/macos/arm64/lib/libcimgui* || true
+
     - name: Cache LuaJIT
       id: cache-luajit
       uses: actions/cache@v4
@@ -1004,7 +1004,7 @@ jobs:
         ls -la prebuilt/macos/arm64/lib/libfreetype* >> prebuilt/macos/arm64/library_info.txt
         echo "" >> prebuilt/macos/arm64/library_info.txt
         echo "=== cimgui ===" >> prebuilt/macos/arm64/library_info.txt
-        ls -la prebuilt/macos/arm64/lib/cimgui* >> prebuilt/macos/arm64/library_info.txt
+        ls -la prebuilt/macos/arm64/lib/libcimgui* >> prebuilt/macos/arm64/library_info.txt
         echo "" >> prebuilt/macos/arm64/library_info.txt
         echo "=== LuaJIT ===" >> prebuilt/macos/arm64/library_info.txt
         ls -la prebuilt/macos/arm64/lib/libluajit* >> prebuilt/macos/arm64/library_info.txt
