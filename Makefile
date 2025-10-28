@@ -46,9 +46,7 @@ release: check-git
 	@echo "✓ Created tag v$(NEXT_VERSION)"
 	@echo ""
 	@echo "Push the release with:"
-	@echo "  git push origin master v$(NEXT_VERSION)"
-	@echo ""
-	@echo "Or use 'make push-release' to push automatically"
+	@echo "  make push-release"
 
 .PHONY: release-minor
 release-minor: check-git
@@ -62,9 +60,7 @@ release-minor: check-git
 	@echo "✓ Created tag v$(NEXT_VERSION)"
 	@echo ""
 	@echo "Push the release with:"
-	@echo "  git push origin master v$(NEXT_VERSION)"
-	@echo ""
-	@echo "Or use 'make push-release' to push automatically"
+	@echo "  make push-release"
 
 .PHONY: release-major
 release-major: check-git
@@ -78,9 +74,7 @@ release-major: check-git
 	@echo "✓ Created tag v$(NEXT_VERSION)"
 	@echo ""
 	@echo "Push the release with:"
-	@echo "  git push origin master v$(NEXT_VERSION)"
-	@echo ""
-	@echo "Or use 'make push-release' to push automatically"
+	@echo "  make push-release"
 
 .PHONY: push-release
 push-release:
