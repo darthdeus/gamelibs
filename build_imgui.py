@@ -287,7 +287,7 @@ def build_library():
     if not failed:
         # Link into shared library
         print("  Linking library...")
-        output = f"cimgui_complete{LIB_EXT}"
+        output = f"{LIB_PREFIX}cimgui_complete{LIB_EXT}"
         
         if IS_WINDOWS:
             cmd = ["link.exe", "/DLL", "/DEBUG", f"/OUT:{output}"] + obj_files
@@ -366,7 +366,7 @@ def update_rock_file():
     content = test_file.read_text()
     
     # Get absolute path to library
-    lib_path = (Path.cwd() / "libs" / f"cimgui_complete{LIB_EXT}").resolve()
+    lib_path = (Path.cwd() / "libs" / f"{LIB_PREFIX}cimgui_complete{LIB_EXT}").resolve()
     
     # Update library path
     old_patterns = [
@@ -420,7 +420,7 @@ ffi.cdef[[
     void igDestroyContext(ImGuiContext* ctx);
 ]]
 
-local lib = ffi.load("./libs/cimgui_complete{LIB_EXT}")
+local lib = ffi.load("./libs/{LIB_PREFIX}cimgui_complete{LIB_EXT}")
 local ctx = lib.igCreateContext(nil)
 if ctx ~= nil then
     lib.igDestroyContext(ctx)

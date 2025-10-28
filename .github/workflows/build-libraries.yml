@@ -203,7 +203,7 @@ jobs:
       uses: actions/cache@v4
       with:
         path: |
-          prebuilt/linux/x86_64/lib/cimgui_complete.so
+          prebuilt/linux/x86_64/lib/libcimgui_complete.so
           prebuilt/linux/x86_64/include/cimgui*
           prebuilt/linux/x86_64/include/imgui_impl_*
         key: cimgui-ubuntu-${{ steps.cache-keys.outputs.cimgui-hash }}
@@ -856,7 +856,7 @@ jobs:
       uses: actions/cache@v4
       with:
         path: |
-          prebuilt/macos/arm64/lib/cimgui*
+          prebuilt/macos/arm64/lib/libcimgui*
           prebuilt/macos/arm64/include/cimgui*
           prebuilt/macos/arm64/include/imgui_impl_*
         key: cimgui-macos-${{ steps.cache-keys.outputs.cimgui-hash }}
