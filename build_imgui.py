@@ -337,7 +337,18 @@ def build_library():
                     shutil.copy(f"cimgui/{lib_output}", lib_dir / lib_output)
             else:
                 shutil.copy(f"cimgui/{output}", lib_dir / output)
-            
+
+                # For macOS, fix the library's install name to use @rpath
+                if IS_MACOS:
+                    lib_path = lib_dir / output
+                    import subprocess
+                    try:
+                        # Change the library's install name so it can be found via @rpath
+                        subprocess.run(["install_name_tool", "-id", f"@rpath/{LIB_PREFIX}{output.replace(LIB_EXT, '')}{LIB_EXT}", str(lib_path)], check=True)
+                        print_success(f"Fixed install name for {output}")
+                    except subprocess.CalledProcessError as e:
+                        print_error(f"Failed to fix install name for {output}: {e}")
+
             # Install headers
             shutil.copy("cimgui/cimgui.h", inc_dir / "cimgui.h")
             if has_wrappers:
