@@ -354,7 +354,7 @@ jobs:
         echo ""
         echo "=== Header files ==="
         find prebuilt/linux/x86_64/include -type f -name "*.h" | head -20
-    
+
     - name: Create release archive
       run: |
         cd prebuilt/linux/x86_64
@@ -368,6 +368,22 @@ jobs:
       with:
         name: gamelibs-linux-x86_64
         path: gamelibs-linux-x86_64.zip
+        retention-days: 7
+
+    - name: Create Lua bindings archive
+      run: |
+        mkdir -p lua
+        cp -r cimgui-lua lua/cimgui
+        zip -r gamelibs-lua.zip lua/
+        echo "Lua archive created: $(ls -lh gamelibs-lua.zip)"
+        echo "Contents:"
+        unzip -l gamelibs-lua.zip
+
+    - name: Upload Lua bindings artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: gamelibs-lua
+        path: gamelibs-lua.zip
         retention-days: 7
 
   build-windows:
@@ -1031,30 +1047,83 @@ jobs:
         path: gamelibs-macos-arm64.zip
         retention-days: 7
 
+  # Combine all platform artifacts into a single zip
+  combine-artifacts:
+    needs: [build-ubuntu, build-windows, build-macos]
+    runs-on: ubuntu-latest
+    name: Combine Artifacts
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Download all artifacts
+      uses: actions/download-artifact@v4
+      with:
+        path: artifacts
+
+    - name: Create combined prebuilt structure
+      run: |
+        mkdir -p prebuilt
+
+        # Extract each platform to its directory
+        unzip artifacts/gamelibs-linux-x86_64/gamelibs-linux-x86_64.zip -d prebuilt/gamelibs-linux-x86_64
+        unzip artifacts/gamelibs-windows-x86_64/gamelibs-windows-x86_64.zip -d prebuilt/gamelibs-windows-x86_64
+        unzip artifacts/gamelibs-macos-arm64/gamelibs-macos-arm64.zip -d prebuilt/gamelibs-macos-arm64
+
+        # Extract Lua bindings (already has lua/ structure)
+        unzip artifacts/gamelibs-lua/gamelibs-lua.zip -d prebuilt
+
+        echo "=== Combined structure ==="
+        find prebuilt -type d | head -30
+        echo ""
+        echo "=== File counts ==="
+        echo "Linux: $(find prebuilt/gamelibs-linux-x86_64 -type f | wc -l) files"
+        echo "Windows: $(find prebuilt/gamelibs-windows-x86_64 -type f | wc -l) files"
+        echo "macOS: $(find prebuilt/gamelibs-macos-arm64 -type f | wc -l) files"
+        echo "Lua: $(find prebuilt/lua -type f | wc -l) files"
+
+    - name: Create combined archive
+      run: |
+        cd prebuilt
+        zip -r ../gamelibs.zip .
+        cd ..
+        echo "Combined archive created: $(ls -lh gamelibs.zip)"
+
+    - name: Upload combined artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: gamelibs
+        path: gamelibs.zip
+        retention-days: 7
+
   create-release:
-    needs: [build-ubuntu, build-windows, build-macos]  # Only wait for Windows build
+    needs: [build-ubuntu, build-windows, build-macos, combine-artifacts]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
     name: Create Release
-    
+
     steps:
     - uses: actions/checkout@v4
-    
-    - name: Download Linux artifact
+
+    - name: Download combined artifact
       uses: actions/download-artifact@v4
       with:
-        name: gamelibs-linux-x86_64
-    
-    - name: Download Windows artifact
+        name: gamelibs
+
+    - name: Download individual artifacts for those who want them
       uses: actions/download-artifact@v4
       with:
-        name: gamelibs-windows-x86_64
-    
-    - name: Download macOS artifact
-      uses: actions/download-artifact@v4
-      with:
-        name: gamelibs-macos-arm64
-    
+        path: individual
+
+    - name: Prepare release files
+      run: |
+        # Move individual platform zips to current directory
+        mv individual/gamelibs-linux-x86_64/gamelibs-linux-x86_64.zip .
+        mv individual/gamelibs-windows-x86_64/gamelibs-windows-x86_64.zip .
+        mv individual/gamelibs-macos-arm64/gamelibs-macos-arm64.zip .
+        mv individual/gamelibs-lua/gamelibs-lua.zip .
+        ls -la *.zip
+
     - name: Generate release notes
       run: |
         cat > release_notes.md << EOF
@@ -1084,14 +1153,24 @@ jobs:
           - SDL2: Metal, OpenGL, Vulkan support
           - Dynamic libraries (.dylib) and static libraries (.a)
         
+        ### Downloads
+        - **\`gamelibs.zip\`** - Combined archive with all platforms (recommended)
+          - Extract to \`prebuilt/\` to get the complete directory structure
+        - Individual platform archives also available for selective download
+
         ### Installation
-        1. Download the archive for your platform
-        2. Extract to your preferred location
-        3. The structure includes:
-           - \`lib/\` - Compiled libraries
-           - \`bin/\` - Runtime binaries (Windows: DLLs)
-           - \`include/\` - Header files
-           - \`lib/pkgconfig/\` - pkg-config files (Linux/macOS)
+        **Option 1: Combined archive (recommended)**
+        \`\`\`bash
+        unzip gamelibs.zip -d prebuilt/
+        \`\`\`
+        This creates:
+        - \`prebuilt/gamelibs-linux-x86_64/\`
+        - \`prebuilt/gamelibs-windows-x86_64/\`
+        - \`prebuilt/gamelibs-macos-arm64/\`
+        - \`prebuilt/lua/\` (platform-independent Lua bindings)
+
+        **Option 2: Individual platform archive**
+        Download only your platform's archive and extract it
         
         ### Usage
         Set your build system to use:
@@ -1109,9 +1188,11 @@ jobs:
         name: Game Libraries ${{ github.ref_name }}
         body_path: release_notes.md
         files: |
+          gamelibs.zip
           gamelibs-linux-x86_64.zip
           gamelibs-windows-x86_64.zip
           gamelibs-macos-arm64.zip
+          gamelibs-lua.zip
         draft: false
         prerelease: false
       env:
