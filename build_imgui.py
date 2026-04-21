@@ -30,6 +30,13 @@ else:
     INSTALL_PREFIX = Path.cwd() / "libs"
     CI_MODE = False
 
+# When CIMGUI_STATIC_SDL2=1 the produced cimgui_complete.{dll,so,dylib}
+# embeds the SDL2 static library instead of dynamically linking against it.
+# Result: a single self-contained shared lib that doesn't need a sibling
+# libSDL2 to load. Requires SDL2 to be built with PIC (CMake flag
+# -DCMAKE_POSITION_INDEPENDENT_CODE=ON or -DSDL_STATIC_PIC=ON).
+STATIC_SDL2 = os.environ.get("CIMGUI_STATIC_SDL2", "0") == "1"
+
 # Platform-specific settings
 if IS_WINDOWS:
     LIB_EXT = ".dll"
@@ -42,7 +49,17 @@ if IS_WINDOWS:
         # Windows might have SDL2 headers directly in include/
         SDL_INCLUDE_DIRS = [f"{SDL2_PREFIX}/include", f"{SDL2_PREFIX}/include/SDL2"]
         SDL_LIB_DIR = f"{SDL2_PREFIX}/lib"
-        EXTRA_LDFLAGS = [f"/LIBPATH:{SDL_LIB_DIR}", "SDL2.lib", "SDL2main.lib", "opengl32.lib"]
+        if STATIC_SDL2:
+            # SDL2-static.lib bundles all SDL2 code; the win32 system libs
+            # below are required by SDL2's audio/video/input subsystems.
+            EXTRA_LDFLAGS = [
+                f"/LIBPATH:{SDL_LIB_DIR}", "SDL2-static.lib", "SDL2main.lib",
+                "opengl32.lib", "winmm.lib", "imm32.lib", "version.lib",
+                "setupapi.lib", "ole32.lib", "oleaut32.lib", "uuid.lib",
+                "advapi32.lib", "shell32.lib", "user32.lib", "gdi32.lib",
+            ]
+        else:
+            EXTRA_LDFLAGS = [f"/LIBPATH:{SDL_LIB_DIR}", "SDL2.lib", "SDL2main.lib", "opengl32.lib"]
     else:
         EXTRA_LDFLAGS = ["-lSDL2", "-lopengl32"]
         SDL_INCLUDE_DIRS = ["C:/SDL2/include"]
@@ -55,7 +72,22 @@ elif IS_MACOS:
     if CI_MODE and SDL2_PREFIX:
         SDL_INCLUDE_DIRS = [f"{SDL2_PREFIX}/include/SDL2", f"{SDL2_PREFIX}/include"]
         SDL_LIB_DIR = f"{SDL2_PREFIX}/lib"
-        EXTRA_LDFLAGS = [f"-L{SDL_LIB_DIR}", "-lSDL2", "-framework", "OpenGL"]
+        if STATIC_SDL2:
+            # Force-load the static SDL2 (libSDL2.a) and pull in the macOS
+            # frameworks SDL2 depends on internally.
+            EXTRA_LDFLAGS = [
+                f"{SDL_LIB_DIR}/libSDL2.a", "-framework", "OpenGL",
+                "-framework", "CoreVideo", "-framework", "Cocoa",
+                "-framework", "IOKit", "-framework", "ForceFeedback",
+                "-framework", "Carbon", "-framework", "CoreAudio",
+                "-framework", "AudioToolbox", "-framework", "AVFoundation",
+                "-framework", "Foundation",
+                "-weak_framework", "GameController",
+                "-weak_framework", "Metal", "-weak_framework", "QuartzCore",
+                "-weak_framework", "CoreHaptics",
+            ]
+        else:
+            EXTRA_LDFLAGS = [f"-L{SDL_LIB_DIR}", "-lSDL2", "-framework", "OpenGL"]
     else:
         EXTRA_LDFLAGS = ["-lSDL2", "-framework", "OpenGL"]
         SDL_INCLUDE_DIRS = ["/usr/local/include/SDL2"]
@@ -69,8 +101,17 @@ else:  # Linux
         # Try both paths since SDL2 CMake install might use either
         SDL_INCLUDE_DIRS = [f"{SDL2_PREFIX}/include/SDL2", f"{SDL2_PREFIX}/include"]
         SDL_LIB_DIR = f"{SDL2_PREFIX}/lib"
-        # Use $ORIGIN to find SDL2 in same directory as cimgui
-        EXTRA_LDFLAGS = [f"-L{SDL_LIB_DIR}", "-lSDL2", "-lGL", "-ldl", "-lm", "-Wl,-rpath,'$ORIGIN'"]
+        if STATIC_SDL2:
+            # Force-load static SDL2.a; SDL2 dlopens X11/Wayland/audio
+            # subsystems at runtime so we don't need to link them here.
+            # -pthread + -lm are SDL2's only static link-time deps on Linux.
+            EXTRA_LDFLAGS = [
+                "-Wl,--whole-archive", f"{SDL_LIB_DIR}/libSDL2.a", "-Wl,--no-whole-archive",
+                "-lGL", "-ldl", "-lm", "-lpthread",
+            ]
+        else:
+            # Use $ORIGIN to find SDL2 in same directory as cimgui
+            EXTRA_LDFLAGS = [f"-L{SDL_LIB_DIR}", "-lSDL2", "-lGL", "-ldl", "-lm", "-Wl,-rpath,'$ORIGIN'"]
     else:
         EXTRA_LDFLAGS = ["-L../bindings", "-lSDL2-2.0", "-lGL", "-ldl", "-Wl,-rpath,$ORIGIN/../bindings"]
         SDL_INCLUDE_DIRS = ["bindings/SDL2-2.32.4/include"]
