@@ -344,7 +344,7 @@ def build_library():
                     import subprocess
                     try:
                         # Change the library's install name so it can be found via @rpath
-                        subprocess.run(["install_name_tool", "-id", f"@rpath/{LIB_PREFIX}{output.replace(LIB_EXT, '')}{LIB_EXT}", str(lib_path)], check=True)
+                        subprocess.run(["install_name_tool", "-id", f"@rpath/{output}", str(lib_path)], check=True)
                         print_success(f"Fixed install name for {output}")
                     except subprocess.CalledProcessError as e:
                         print_error(f"Failed to fix install name for {output}: {e}")
