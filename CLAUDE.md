@@ -10,6 +10,13 @@ Build and maintain precompiled game development libraries for Rock projects, wit
 - **ImGui** (cimgui) - Immediate mode GUI with SDL2/OpenGL3 backends
 - **FreeType** - Font rendering library
 - **LuaJIT** - Just-in-time compiler for Lua
+- **libmpv + ffmpeg** (planned) - Media playback and screen capture for Anvil.
+  Use mpv-build to produce a self-contained libmpv.dylib/.so with the ffmpeg
+  libs (libavcodec, libavformat, libavdevice, libavutil, libswscale,
+  libswresample) as separate shared libs alongside it. Both stone-video
+  (playback via libmpv) and the Anvil recorder (screen capture via libavdevice)
+  link against these vendored builds, guaranteeing version consistency.
+  See `anvil/docs/recorder-design.md` and `anvil/TODO.md` for context.
 
 ## Structure
 ```
