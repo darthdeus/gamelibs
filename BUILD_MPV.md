@@ -142,6 +142,21 @@ structurally fixes the incident.
       symlink chains, `@rpath`(macOS)/`$ORIGIN`(linux) staged into the
       existing `gamelibs-{linux-x86_64,macos-arm64}.zip`.
 
+### libass dropped (decided 2026-05-16, all platforms)
+
+mpv now builds `-Dlibass=disabled` and mpv-build's unconditional
+libass step is patched out of its `build` script (`build_mpv.py`
+`clone_mpv_build()`). libass = SSA/ASS subtitle rendering, used by
+**no** consumer (fm audio preview, anvil video preview, recorder/
+export via ffmpeg-the-third). It was also the single most fragile
+link: its autotools/gettext `autoreconf` hit an MSYS2<->MINGW
+path-mangling bug that consumed six Windows CI rounds — `aclocal:
+.../progtest.m4 does not exist` while `ls` proved the file present,
+because a mingw tool handed aclocal a Windows-rooted path that is not
+a valid MSYS mount. Uniform on every platform: smaller libmpv, one
+fewer dep, no behaviour change for our use cases. If subtitles are
+ever needed, revisit with a non-autotools libass path.
+
 ### Phase 3 — Windows x86_64 — self-built via MSYS2 — IN PROGRESS
 
 Implemented (iterating in CI via master pushes; release only once green):

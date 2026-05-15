@@ -39,11 +39,11 @@ MPV_BUILD_COMMIT = "9443097290e82008f26f1597590926c63e7ae053"
 # the pair whose skew caused the original fm crash -- pin both hard.
 FFMPEG_TAG = "n7.1.1"
 MPV_TAG = "v0.40.0"
-# libass / libplacebo are statically linked INTO libmpv (no ABI skew
-# possible across the process boundary), so "release" (latest upstream
-# release tag, not master) is reproducible enough and avoids pinning a
-# libplacebo too old for mpv 0.40. Revisit only if a build breaks.
-LIBASS_REF = "release"
+# libplacebo is statically linked INTO libmpv (no ABI skew possible
+# across the process boundary), so "release" (latest upstream release
+# tag, not master) is reproducible enough and avoids pinning one too
+# old for mpv 0.40. (libass is disabled entirely -- see
+# clone_mpv_build() for the rationale.)
 LIBPLACEBO_REF = "release"
 
 ROOT = Path(__file__).resolve().parent
@@ -86,8 +86,29 @@ def clone_mpv_build(work: Path) -> Path:
     cfg.mkdir(exist_ok=True)
     (cfg / "branch-ffmpeg").write_text(f"@{FFMPEG_TAG}\n")
     (cfg / "branch-mpv").write_text(f"@{MPV_TAG}\n")
-    (cfg / "branch-libass").write_text(f"{LIBASS_REF}\n")
     (cfg / "branch-libplacebo").write_text(f"{LIBPLACEBO_REF}\n")
+
+    # Drop libass entirely. It is SSA/ASS subtitle rendering -- unused
+    # by every consumer (fm audio preview, anvil video preview, the
+    # recorder/export which goes through ffmpeg-the-third). It is also
+    # the single most fragile link in the chain: its autotools/gettext
+    # autoreconf hit an MSYS2<->MINGW path-mangling bug that ate six CI
+    # rounds on Windows ("aclocal: progtest.m4 does not exist" while the
+    # file demonstrably exists, because a mingw tool hands aclocal a
+    # Windows-rooted path that is not a valid MSYS mount). Carrying a
+    # flaky dep for a feature we don't use is exactly what this repo
+    # avoids -- so mpv builds with `libass=disabled` and mpv-build's
+    # unconditional libass step is patched out of its `build` script
+    # (it has no skip flag). Uniform on all platforms: smaller libmpv,
+    # one fewer dep, no behaviour change for our use cases.
+    build_script = mb / "build"
+    txt = build_script.read_text()
+    patched = "\n".join(
+        ("# [build_mpv.py] libass disabled: " + ln) if "libass" in ln else ln
+        for ln in txt.splitlines()
+    ) + "\n"
+    if patched != txt:
+        build_script.write_text(patched)
     return mb
 
 
@@ -118,6 +139,7 @@ def write_options(mb: Path):
             "-Dlibmpv=true",
             "-Dcplayer=false",
             "-Ddefault_library=shared",
+            "-Dlibass=disabled",   # see clone_mpv_build(): unused + fragile
         ]) + "\n"
     )
 
