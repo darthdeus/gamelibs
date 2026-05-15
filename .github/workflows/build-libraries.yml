@@ -773,6 +773,7 @@ jobs:
           automake
           libtool
           make
+          gettext
           gettext-devel
           pkgconf
           mingw-w64-x86_64-toolchain
