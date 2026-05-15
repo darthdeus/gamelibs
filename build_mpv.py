@@ -122,8 +122,13 @@ def write_options(mb: Path):
     # --enable-avdevice (NOT --enable-libavdevice, which aborts
     # configure); keep it explicit so a future default change can't
     # silently drop the Anvil recorder's screen-capture inputs.
+    # SPACE-separated, single line -- NOT newline-joined. mpv-build
+    # appends this file's contents into its ffmpeg configure invocation;
+    # on unix newlines word-split fine, but under MSYS2 sh they survive
+    # into argv ("Unknown option '--disable-programs\n'"). One line is
+    # robust everywhere.
     (mb / "ffmpeg_options").write_text(
-        "\n".join([
+        " ".join([
             "--enable-shared",
             "--disable-static",
             "--enable-avdevice",
@@ -139,9 +144,13 @@ def write_options(mb: Path):
             "-Dlibmpv=true",
             "-Dcplayer=false",
             "-Ddefault_library=shared",
-            "-Dlibass=disabled",   # see clone_mpv_build(): unused + fragile
         ]) + "\n"
     )
+    # NB: do NOT pass -Dlibass=disabled. mpv's libass is a meson
+    # `feature` defaulting to auto -- meson rejects it as "Unknown
+    # option" on some versions, and it is unneeded: clone_mpv_build()
+    # patches mpv-build to never build libass, so the dependency is
+    # absent and mpv's auto-detection disables it on its own.
 
 
 def stage(mb: Path, prefix: Path):
