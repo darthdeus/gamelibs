@@ -67,7 +67,14 @@ jobs:
         SOLOUD_HASH=$(find soloud-RELEASE_20200207 -type f -name '*.cpp' -o -name '*.c' -o -name '*.h' | head -100 | xargs sha256sum 2>/dev/null | sha256sum | cut -d' ' -f1)
         SOLOUD_SCRIPT_HASH=$(sha256sum build_soloud.py 2>/dev/null | cut -d' ' -f1)
         echo "soloud-hash=${CACHE_VERSION}-${SOLOUD_HASH}-${SOLOUD_SCRIPT_HASH}${CACHE_SUFFIX}" >> $GITHUB_OUTPUT
-    
+
+        # libmpv+FFmpeg: build_mpv.py embeds the pinned FFmpeg/mpv/
+        # mpv-build refs, so hashing the script alone captures any pin
+        # bump. ffmpeg+mpv compile is ~10-30min on a runner -- caching
+        # the staged output is mandatory.
+        MPV_HASH=$(sha256sum build_mpv.py 2>/dev/null | cut -d' ' -f1)
+        echo "mpv-hash=${CACHE_VERSION}-${MPV_HASH}${CACHE_SUFFIX}" >> $GITHUB_OUTPUT
+
     - name: Cache SDL2 build
       id: cache-sdl2
       uses: actions/cache@v3
@@ -127,6 +134,13 @@ jobs:
           libpng-dev
           zlib1g-dev
           libbz2-dev
+          nasm
+          autoconf
+          automake
+          libtool-bin
+          patchelf
+          libgnutls28-dev
+          python3-pip
         version: 1.0
     
     - name: Initialize submodules
@@ -325,6 +339,38 @@ jobs:
         fi
         ls -la prebuilt/linux/x86_64/lib/libsoloud* || true
 
+    - name: Cache libmpv+FFmpeg build
+      id: cache-mpv
+      uses: actions/cache@v4
+      with:
+        path: |
+          prebuilt/linux/x86_64/lib/libmpv*
+          prebuilt/linux/x86_64/lib/libav*
+          prebuilt/linux/x86_64/lib/libsw*
+          prebuilt/linux/x86_64/include/mpv
+          prebuilt/linux/x86_64/include/libav*
+          prebuilt/linux/x86_64/include/libsw*
+        key: mpv-ubuntu-${{ steps.cache-keys.outputs.mpv-hash }}
+
+    - name: Build libmpv+FFmpeg
+      if: steps.cache-mpv.outputs.cache-hit != 'true'
+      run: |
+        # mpv 0.40 needs a newer meson/ninja than Ubuntu 22.04 apt
+        # ships; pip is the reproducible source.
+        pip3 install --user 'meson>=1.3' ninja
+        export PATH="$HOME/.local/bin:$PATH"
+        python3 build_mpv.py
+        echo "libmpv+FFmpeg built (pinned, version-consistent)"
+
+    - name: libmpv cache status
+      run: |
+        if [ "${{ steps.cache-mpv.outputs.cache-hit }}" = "true" ]; then
+          echo "✓ libmpv+FFmpeg restored from cache"
+        else
+          echo "✓ libmpv+FFmpeg built from source"
+        fi
+        ls -la prebuilt/linux/x86_64/lib/libmpv* prebuilt/linux/x86_64/lib/libav* 2>/dev/null || true
+
     - name: Create library info file
       run: |
         cat > prebuilt/linux/x86_64/library_info.txt << EOF
@@ -424,7 +470,14 @@ jobs:
         SOLOUD_HASH=$(find soloud-RELEASE_20200207 -type f -name '*.cpp' -o -name '*.c' -o -name '*.h' | head -100 | xargs sha256sum 2>/dev/null | sha256sum | cut -d' ' -f1)
         SOLOUD_SCRIPT_HASH=$(sha256sum build_soloud.py 2>/dev/null | cut -d' ' -f1)
         echo "soloud-hash=${CACHE_VERSION}-${SOLOUD_HASH}-${SOLOUD_SCRIPT_HASH}${CACHE_SUFFIX}" >> $GITHUB_OUTPUT
-    
+
+        # libmpv+FFmpeg: build_mpv.py embeds the pinned FFmpeg/mpv/
+        # mpv-build refs, so hashing the script alone captures any pin
+        # bump. ffmpeg+mpv compile is ~10-30min on a runner -- caching
+        # the staged output is mandatory.
+        MPV_HASH=$(sha256sum build_mpv.py 2>/dev/null | cut -d' ' -f1)
+        echo "mpv-hash=${CACHE_VERSION}-${MPV_HASH}${CACHE_SUFFIX}" >> $GITHUB_OUTPUT
+
     - name: Cache SDL2 build
       id: cache-sdl2
       uses: actions/cache@v3
@@ -771,7 +824,7 @@ jobs:
 
     - name: Setup build environment
       run: |
-        brew install cmake ninja pkg-config
+        brew install cmake ninja pkg-config meson nasm
         echo "Build environment ready"
     
     - name: Create build directories
@@ -978,6 +1031,34 @@ jobs:
         fi
         ls -la prebuilt/macos/arm64/lib/libsoloud* || true
 
+    - name: Cache libmpv+FFmpeg build
+      id: cache-mpv
+      uses: actions/cache@v4
+      with:
+        path: |
+          prebuilt/macos/arm64/lib/libmpv*
+          prebuilt/macos/arm64/lib/libav*
+          prebuilt/macos/arm64/lib/libsw*
+          prebuilt/macos/arm64/include/mpv
+          prebuilt/macos/arm64/include/libav*
+          prebuilt/macos/arm64/include/libsw*
+        key: mpv-macos-arm64-${{ steps.cache-keys.outputs.mpv-hash }}
+
+    - name: Build libmpv+FFmpeg
+      if: steps.cache-mpv.outputs.cache-hit != 'true'
+      run: |
+        python3 build_mpv.py
+        echo "libmpv+FFmpeg built (pinned, version-consistent)"
+
+    - name: libmpv cache status
+      run: |
+        if [ "${{ steps.cache-mpv.outputs.cache-hit }}" = "true" ]; then
+          echo "✓ libmpv+FFmpeg restored from cache"
+        else
+          echo "✓ libmpv+FFmpeg built from source"
+        fi
+        ls -la prebuilt/macos/arm64/lib/libmpv* prebuilt/macos/arm64/lib/libav* 2>/dev/null || true
+
     - name: Create library info file
       run: |
         cat > prebuilt/macos/arm64/library_info.txt << EOF
@@ -1115,6 +1196,9 @@ jobs:
         - **SDL_image** v2.8.2 - Image loading (PNG, JPEG, WebP support)
         - **SDL_mixer** v2.8.0 - Audio mixing (WAV, OGG, MP3 support)
         - **SoLoud** 20200207 - Portable audio engine (ALSA/WinMM/CoreAudio backends)
+        - **libmpv + FFmpeg** (mpv v0.40.0 / FFmpeg n7.1.1) - media playback +
+          screen capture, version-consistent by construction. **Linux + macOS
+          only** for now; Windows zip excludes it (tracked in gamelibs/BUILD_MPV.md).
         
         ### Platform Builds
         - **Linux x86_64** (\`gamelibs-linux-x86_64.zip\`)
