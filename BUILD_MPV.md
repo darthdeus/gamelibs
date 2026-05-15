@@ -142,7 +142,18 @@ structurally fixes the incident.
       symlink chains, `@rpath`(macOS)/`$ORIGIN`(linux) staged into the
       existing `gamelibs-{linux-x86_64,macos-arm64}.zip`.
 
-### Phase 3 — Windows x86_64 — self-built via MSYS2, like everything else
+### Phase 3 — Windows x86_64 — self-built via MSYS2 — IN PROGRESS
+
+Implemented (iterating in CI via master pushes; release only once green):
+`build_mpv.py` has a `stage_windows()` (DLLs→bin, import libs+pkgconfig
+→lib, no rpath/symlinks) and launches `./rebuild` via `sh` (CreateProcess
+won't honor the shebang). `build-windows` job: `msys2/setup-msys2`
+(MINGW64 + toolchain/meson/ninja/nasm + libass/libplacebo deps), cached
+`shell: msys2 {0}` build step, same `git hash-object` cache key. Same
+pinned sources, dynamic shared, no third-party prebuilts. Diagnosing
+over the CI loop like mac/linux did.
+
+Original design notes (still the rationale):
 
 Still deferred in *sequence* (mac+linux cut over first) but **not
 architecturally special**. Earlier notes proposed repackaging

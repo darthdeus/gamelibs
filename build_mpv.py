@@ -129,7 +129,10 @@ def stage(mb: Path, prefix: Path):
         d.mkdir(parents=True, exist_ok=True)
 
     plat = get_platform()
-    ext = {"macos": ".dylib", "windows": ".dll"}.get(plat, ".so")
+    if plat == "windows":
+        return stage_windows(mb, prefix)
+
+    ext = {"macos": ".dylib"}.get(plat, ".so")
 
     # FFmpeg shared libs + headers (mpv-build installs FFmpeg into
     # mpv-build/build_libs by default; fall back to the in-tree dirs).
@@ -192,6 +195,69 @@ def stage(mb: Path, prefix: Path):
         fix_linux_rpath(lib)
 
 
+def stage_windows(mb: Path, prefix: Path):
+    """mingw mpv-build layout differs from unix: shared objects are
+    `name-MAJOR.dll` in build_libs/bin (+ mpv/build), import libs are
+    `*.dll.a` in build_libs/lib. gamelibs Windows convention (matches
+    SDL2): DLLs -> prefix/bin, import libs + pkgconfig -> prefix/lib,
+    headers -> prefix/include. No symlinks, no rpath -- co-located
+    DLLs in bin/ resolve at load time."""
+    binr = prefix / "bin"
+    lib = prefix / "lib"
+    inc = prefix / "include"
+    for d in (binr, lib, inc, lib / "pkgconfig"):
+        d.mkdir(parents=True, exist_ok=True)
+
+    ff = mb / "build_libs"
+    ff_bin = ff / "bin"
+    ff_lib = ff / "lib"
+    ff_inc = ff / "include"
+    if not ff_lib.exists():
+        raise SystemExit(
+            f"FFmpeg install dir not found at {ff_lib}. "
+            "mpv-build mingw layout changed -- inspect build_libs/ and "
+            "update stage_windows()."
+        )
+
+    # FFmpeg + deps DLLs (avcodec-61.dll, swresample-5.dll, ...). mingw
+    # may also drop runtime DLLs here (libwinpthread, zlib) -- ship them
+    # too; a consumer DLL dir must be self-resolving.
+    if ff_bin.is_dir():
+        for f in ff_bin.glob("*.dll"):
+            shutil.copy2(f, binr / f.name)
+    # Import libs (.dll.a) + pkgconfig for the linker / build.rs.
+    for f in ff_lib.iterdir():
+        if f.is_file() and (f.name.endswith(".dll.a") or f.suffix == ".lib"):
+            shutil.copy2(f, lib / f.name)
+    src_pc = ff_lib / "pkgconfig"
+    if src_pc.is_dir():
+        for pc in src_pc.glob("*.pc"):
+            shutil.copy2(pc, lib / "pkgconfig" / pc.name)
+    for sub in ff_inc.iterdir():
+        if sub.is_dir():
+            shutil.copytree(sub, inc / sub.name, dirs_exist_ok=True)
+
+    # libmpv: meson on mingw emits libmpv-2.dll + libmpv.dll.a in
+    # mpv/build (DLL may also land via the meson install; scan both).
+    mpv_build_dir = mb / "mpv" / "build"
+    for f in mpv_build_dir.rglob("*mpv*"):
+        if f.is_dir():
+            continue
+        if f.name.endswith(".dll"):
+            shutil.copy2(f, binr / f.name)
+        elif f.name.endswith(".dll.a") or f.name.endswith(".lib"):
+            shutil.copy2(f, lib / f.name)
+    mpv_hdr = mb / "mpv" / "include" / "mpv"
+    if not mpv_hdr.exists():
+        mpv_hdr = mb / "mpv" / "libmpv"
+    shutil.copytree(mpv_hdr, inc / "mpv", dirs_exist_ok=True)
+    mpv_pc = mpv_build_dir / "meson-private" / "mpv.pc"
+    if mpv_pc.exists():
+        shutil.copy2(mpv_pc, lib / "pkgconfig" / "mpv.pc")
+
+    print("  windows: staged DLLs ->", binr, "import libs ->", lib)
+
+
 def fix_macos_install_names(lib: Path):
     """Rewrite each dylib's id + inter-lib refs to @rpath/<name> so a
     consumer's -rpath,@loader_path/... resolves the whole set with no
@@ -237,8 +303,15 @@ def main():
     write_options(mb)
     jobs = str(os.cpu_count() or 4)
     # ./rebuild does: update -> build ffmpeg -> build mpv, honoring the
-    # *_options files written above.
-    run(["./rebuild", "-j" + jobs], cwd=mb)
+    # *_options files written above. mpv-build's scripts are POSIX sh;
+    # on Windows we run under an MSYS2 MINGW64 shell, but Python's
+    # subprocess uses CreateProcess (no shebang honoring) so the script
+    # must be launched through `sh` explicitly. On unix the shebang
+    # works directly.
+    rebuild = (["sh", "./rebuild", "-j" + jobs]
+               if plat == "windows"
+               else ["./rebuild", "-j" + jobs])
+    run(rebuild, cwd=mb)
     stage(mb, prefix)
 
     print("\n=== staged ===", flush=True)

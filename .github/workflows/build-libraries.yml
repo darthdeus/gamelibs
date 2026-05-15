@@ -739,6 +739,72 @@ jobs:
         ls -la prebuilt/windows/x86_64/lib/soloud* || true
         ls -la prebuilt/windows/x86_64/bin/soloud* || true
 
+    - name: Cache libmpv+FFmpeg build
+      id: cache-mpv
+      uses: actions/cache@v4
+      with:
+        path: |
+          prebuilt/windows/x86_64/bin/mpv*.dll
+          prebuilt/windows/x86_64/bin/av*.dll
+          prebuilt/windows/x86_64/bin/sw*.dll
+          prebuilt/windows/x86_64/lib/libmpv*
+          prebuilt/windows/x86_64/lib/libav*
+          prebuilt/windows/x86_64/lib/libsw*
+          prebuilt/windows/x86_64/lib/pkgconfig/mpv.pc
+          prebuilt/windows/x86_64/lib/pkgconfig/libav*
+          prebuilt/windows/x86_64/include/mpv
+          prebuilt/windows/x86_64/include/libav*
+          prebuilt/windows/x86_64/include/libsw*
+        key: mpv-windows-x86_64-${{ steps.cache-keys.outputs.mpv-hash }}
+
+    - name: Setup MSYS2 (libmpv+FFmpeg toolchain)
+      if: steps.cache-mpv.outputs.cache-hit != 'true'
+      uses: msys2/setup-msys2@v2
+      with:
+        msystem: MINGW64
+        update: true
+        # mpv-build compiles ffmpeg + libass + libplacebo + mpv from
+        # our pinned sources; these are its toolchain + the libass/
+        # libplacebo dependencies (same role as the ubuntu apt /
+        # macos brew sets, in mingw-w64 form).
+        install: >-
+          git diffutils
+          mingw-w64-x86_64-toolchain
+          mingw-w64-x86_64-meson
+          mingw-w64-x86_64-ninja
+          mingw-w64-x86_64-nasm
+          mingw-w64-x86_64-pkgconf
+          mingw-w64-x86_64-python
+          mingw-w64-x86_64-fribidi
+          mingw-w64-x86_64-harfbuzz
+          mingw-w64-x86_64-freetype
+          mingw-w64-x86_64-fontconfig
+          mingw-w64-x86_64-libpng
+          mingw-w64-x86_64-libjpeg-turbo
+          mingw-w64-x86_64-lcms2
+          mingw-w64-x86_64-vulkan-headers
+          mingw-w64-x86_64-vulkan-loader
+
+    - name: Build libmpv+FFmpeg
+      if: steps.cache-mpv.outputs.cache-hit != 'true'
+      shell: msys2 {0}
+      run: |
+        # Same self-built, version-consistent libmpv+shared-FFmpeg as
+        # mac/linux -- just under the MSYS2 MINGW64 toolchain. No
+        # third-party prebuilts.
+        python build_mpv.py
+        echo "libmpv+FFmpeg built (pinned, version-consistent, mingw)"
+
+    - name: libmpv cache status
+      shell: bash
+      run: |
+        if [ "${{ steps.cache-mpv.outputs.cache-hit }}" = "true" ]; then
+          echo "✓ libmpv+FFmpeg restored from cache"
+        else
+          echo "✓ libmpv+FFmpeg built from source"
+        fi
+        ls -la prebuilt/windows/x86_64/bin/*mpv*.dll prebuilt/windows/x86_64/bin/av*.dll 2>/dev/null || true
+
     - name: Create library info file
       shell: bash
       run: |
@@ -1211,8 +1277,9 @@ jobs:
         - **SDL_mixer** v2.8.0 - Audio mixing (WAV, OGG, MP3 support)
         - **SoLoud** 20200207 - Portable audio engine (ALSA/WinMM/CoreAudio backends)
         - **libmpv + FFmpeg** (mpv v0.40.0 / FFmpeg n7.1.1) - media playback +
-          screen capture, version-consistent by construction. **Linux + macOS
-          only** for now; Windows zip excludes it (tracked in gamelibs/BUILD_MPV.md).
+          screen capture, self-built and version-consistent by construction
+          on all three platforms (mac/linux dynamic shared; Windows mingw
+          shared via MSYS2). No third-party prebuilts.
         
         ### Platform Builds
         - **Linux x86_64** (\`gamelibs-linux-x86_64.zip\`)
