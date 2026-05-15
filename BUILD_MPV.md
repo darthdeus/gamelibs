@@ -142,18 +142,50 @@ structurally fixes the incident.
       symlink chains, `@rpath`(macOS)/`$ORIGIN`(linux) staged into the
       existing `gamelibs-{linux-x86_64,macos-arm64}.zip`.
 
-### Phase 3 — Windows x86_64 — DEFERRED (decided 2026-05-15)
+### Phase 3 — Windows x86_64 — INVESTIGATED 2026-05-15, not built
 
-Decision: **macOS + Linux ship via CI first; Windows is a separate
-follow-up.** mpv-build's native Windows path (MSYS2/mingw) is the
-documented risk and slow to debug over the CI loop — it must not block
-the two working platforms. The Windows gamelibs zip keeps its current
-no-mpv state until this is picked up.
+Still deferred (mac+linux ship first) but the architecture question is
+now answered — and it's the opposite of what Phase 3 originally
+assumed.
 
-When resumed, the leading option is **repackage shinchiro/mpv-winbuild**
-pinned libmpv+FFmpeg DLLs (battle-tested, low CI churn) rather than
-running mpv-build under MSYS2. `stone-video` Windows link still needs
-`libavdevice` → gdigrab. Not started.
+**Constraint check:** `ffmpeg-the-third = "5.0"` is an *unconditional*
+stone-video dep (not target-gated) and `record.rs` has a
+`#[cfg(target_os = "windows")]` gdigrab path — so Windows needs FFmpeg
+for the recorder/export too, not just libmpv for playback. The
+"one-FFmpeg invariant" applies on Windows as well.
+
+**Why the mac/linux recipe doesn't port:** vanilla `mpv-build` has no
+mingw cross/MSYS2 path (no `mingw`/`cross` in its scripts). Ecosystem
+Windows libmpv comes from **shinchiro/mpv-winbuild-cmake**, a separate
+toolchain. shinchiro's `mpv-dev` ships a **single `libmpv-2.dll` with
+FFmpeg statically linked in** (no separate `libav*.dll`).
+
+**Key realization — static-in-libmpv is *immune* to the skew bug by
+construction.** The original crash was a *dynamically* linked libmpv
+resolving a *different* dynamic FFmpeg at the same soname. A libmpv
+with FFmpeg statically baked in exports none of those symbols and
+loads no external `libav*` — it cannot be hijacked by another FFmpeg
+in the process. So on Windows the correct, low-risk design is the
+*inverse* of mac/linux:
+
+- **Playback (fm/anvil): shinchiro `mpv-dev`** — self-contained
+  `libmpv-2.dll`, pinned. No skew possible (static, isolated).
+- **Recorder/export (`ffmpeg-the-third`): a separate standard shared
+  FFmpeg** (BtbN or gyan win64 shared, pinned). It does *not* collide
+  with libmpv's private static FFmpeg precisely because the latter is
+  isolated. `FFMPEG_DIR` points `ffmpeg-the-third` at this build.
+
+This is simpler and lower-CI-churn than MSYS2 mpv-build, and still
+satisfies "no skew" — just via static isolation instead of a shared
+single copy. mac/linux keep the shared-FFmpeg model (dynamic libmpv
+there *must* share, since it's not static).
+
+**Open product question before building:** confirm the pinned shinchiro
+libmpv FFmpeg generation is acceptable (it won't match n7.1.1 exactly;
+that's fine — it's isolated). Pin shinchiro release + BtbN FFmpeg
+release; wire into the existing `build-windows` job (download +
+repackage, no compile) + `stone-video/build.rs` Windows arm. Not
+started; not blocking mac/linux cutover.
 
 ### macOS cache-key bug (latent, pre-existing, repo-wide)
 
