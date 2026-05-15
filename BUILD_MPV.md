@@ -124,15 +124,23 @@ structurally fixes the incident.
 - [ ] `otool -L libstone_video.dylib` + `otool -L libmpv.2.dylib`:
       every libav\* current_version identical between the two.
 
-### Phase 2 — Linux x86_64 via CI
+### Phase 2 — macOS + Linux via CI — DONE (run 25934244764, 943ac59)
 
-- [ ] Add `build_mpv.py` Linux path (apt build deps: nasm, libx11,
-      libxext, pulseaudio/alsa headers for ao, libasound2-dev).
-      `--enable-libxcb`/x11grab + alsa/pulse ao.
-- [ ] New job in `.github/workflows/build-libraries.yml` mirroring the
-      SDL2 cache-key + `actions/cache` pattern (hash `build_mpv.py` +
-      pinned tags). ffmpeg+mpv compile is slow — caching is mandatory.
-- [ ] `$ORIGIN` rpath; stage into `prebuilt/linux/x86_64`.
+- [x] mpv cache+build steps wired into the `ubuntu` and `macos` jobs
+      (mirrors SDL2 cache pattern; key = hash of `build_mpv.py`, which
+      embeds the pins).
+- [x] CI dep gap fixed (the "works on my machine" trap a dev box
+      hides): libass needs **fribidi** (+fontconfig+harfbuzz) and
+      **autotools** — added `libfribidi-dev`/`libfontconfig1-dev`/
+      `libharfbuzz-dev` (ubuntu apt) and `autoconf automake libtool
+      fribidi fontconfig harfbuzz` (macos brew).
+- [x] **Pins validated in CI**: built FFmpeg 7.x (libavformat
+      61.7.100, libavutil 59.39.100) + libmpv 2.5.0 (mpv 0.40.0) —
+      proves `config/branch-*` pinning is honored and reproducible
+      (the earlier unpinned local build was FFmpeg 8.x).
+- [x] Both artifacts contain libmpv + libav*/libsw* with intact
+      symlink chains, `@rpath`(macOS)/`$ORIGIN`(linux) staged into the
+      existing `gamelibs-{linux-x86_64,macos-arm64}.zip`.
 
 ### Phase 3 — Windows x86_64 — DEFERRED (decided 2026-05-15)
 
