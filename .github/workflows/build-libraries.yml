@@ -407,7 +407,7 @@ jobs:
     - name: Create release archive
       run: |
         cd prebuilt/linux/x86_64
-        zip -r ../../../gamelibs-linux-x86_64.zip .
+        zip -ry ../../../gamelibs-linux-x86_64.zip .
         cd ../../..
         echo "Archive created: $(ls -lh gamelibs-linux-x86_64.zip)"
     
@@ -1105,7 +1105,7 @@ jobs:
     - name: Create release archive
       run: |
         cd prebuilt/macos/arm64
-        zip -r ../../../gamelibs-macos-arm64.zip *
+        zip -ry ../../../gamelibs-macos-arm64.zip *
         cd ../../..
         echo "Archive created: $(ls -lh gamelibs-macos-arm64.zip)"
     

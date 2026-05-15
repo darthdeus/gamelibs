@@ -155,6 +155,24 @@ pinned libmpv+FFmpeg DLLs (battle-tested, low CI churn) rather than
 running mpv-build under MSYS2. `stone-video` Windows link still needs
 `libavdevice` → gdigrab. Not started.
 
+### Packaging bugs found at consumer install (v0.6.0) — FIX BEFORE re-release
+
+1. **No `.pc` files shipped.** FFmpeg installs pkgconfig under
+   `build_libs/lib/pkgconfig/*.pc`, but `build_mpv.py stage()` only
+   scanned `build_libs/lib/` for `*.pc` (wrong dir) — so the zip has
+   zero `libav*.pc` / `mpv.pc`. Consequence: consumers can't point
+   `PKG_CONFIG_PATH` at the vendored prefix. Fix `stage()` to copy
+   `build_libs/lib/pkgconfig/*` and the meson `mpv.pc`.
+2. **Symlinks dereferenced in the zip.** CI staging preserves the
+   `libfoo.dylib -> .N -> .N.M.P` chain, but the workflow's
+   `zip -r` (macOS/linux) follows symlinks → 3× full copies (~42MB
+   zip, 3×12MB libavcodec). Add `-y` (zip store-symlinks) to the
+   `Create release archive` steps in the ubuntu + macos jobs.
+
+Both are gamelibs-side; functional (linking still resolves) but must
+be fixed for a clean prefix + sane artifact size, then `make
+release-minor` again (→ v0.6.1).
+
 ### Phase 4 — Release + consumer cutover
 
 - [ ] `make release-minor` (new lib = minor bump), push tag, CI

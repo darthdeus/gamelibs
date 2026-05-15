@@ -156,10 +156,15 @@ def stage(mb: Path, prefix: Path):
     for f in src_lib.iterdir():
         if f.is_dir():
             continue
-        if f.suffix == ".pc":
-            shutil.copy2(f, lib / "pkgconfig" / f.name)
-        elif ext in f.name:
+        if ext in f.name:
             put_lib(f, lib / f.name)
+    # FFmpeg installs its .pc files under lib/pkgconfig/, NOT lib/ --
+    # the original scan missed them entirely (v0.6.0 shipped zero
+    # libav*.pc, so consumers couldn't PKG_CONFIG_PATH the prefix).
+    src_pc = src_lib / "pkgconfig"
+    if src_pc.is_dir():
+        for pc in src_pc.glob("*.pc"):
+            shutil.copy2(pc, lib / "pkgconfig" / pc.name)
     for sub in src_inc.iterdir():
         if sub.is_dir():
             shutil.copytree(sub, inc / sub.name, dirs_exist_ok=True)
