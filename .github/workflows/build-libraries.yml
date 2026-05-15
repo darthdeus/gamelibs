@@ -141,6 +141,9 @@ jobs:
           patchelf
           libgnutls28-dev
           python3-pip
+          libfribidi-dev
+          libfontconfig1-dev
+          libharfbuzz-dev
         version: 1.0
     
     - name: Initialize submodules
@@ -824,7 +827,8 @@ jobs:
 
     - name: Setup build environment
       run: |
-        brew install cmake ninja pkg-config meson nasm
+        brew install cmake ninja pkg-config meson nasm \
+          autoconf automake libtool fribidi fontconfig harfbuzz
         echo "Build environment ready"
     
     - name: Create build directories
