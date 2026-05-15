@@ -155,7 +155,20 @@ pinned libmpv+FFmpeg DLLs (battle-tested, low CI churn) rather than
 running mpv-build under MSYS2. `stone-video` Windows link still needs
 `libavdevice` → gdigrab. Not started.
 
-### Packaging bugs found at consumer install (v0.6.0) — FIX BEFORE re-release
+### macOS cache-key bug (latent, pre-existing, repo-wide)
+
+The `Generate cache keys` step uses `sha256sum`, which **does not exist
+on macOS runners** — every `*-macos-*` cache key degrades to the
+constant `<lib>-macos-v1-` (empty hash). Effect: macOS lib caches never
+invalidate on source change; v0.6.1's `.pc`/symlink fixes built on
+Linux but macOS `Build libmpv+FFmpeg` was `skipped` (stale v0.6.0
+restored). Fixed for the mpv key only by switching to `git hash-object`
+(portable, deterministic). The other libs (SDL2/freetype/…) still have
+the constant-key bug — out of scope here, but they silently never
+rebuild on macOS until someone bumps `CACHE_VERSION`. Worth a separate
+gamelibs cleanup.
+
+### Packaging bugs found at consumer install (v0.6.0) — Linux fixed v0.6.1, macOS pending v0.6.2
 
 1. **No `.pc` files shipped.** FFmpeg installs pkgconfig under
    `build_libs/lib/pkgconfig/*.pc`, but `build_mpv.py stage()` only
