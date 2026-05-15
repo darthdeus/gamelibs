@@ -796,23 +796,18 @@ jobs:
       if: steps.cache-mpv.outputs.cache-hit != 'true'
       shell: msys2 {0}
       run: |
-        # Diagnose + fix the libass-autoreconf aclocal-macro lookup.
-        # Three rounds chasing "which package owns progtest.m4" by name
-        # is a dead end -- find where MSYS2 actually put the gettext +
-        # pkgconf m4s and put those dirs on aclocal's search path. This
-        # is robust regardless of package layout; the listing also tells
-        # us the ground truth if a macro is genuinely absent.
-        echo "=== which gettext/pkgconf m4s exist ==="
-        pacman -Ql gettext gettext-devel pkgconf 2>/dev/null | grep -E '\.m4$' || true
-        echo "=== progtest.m4 / pkg.m4 locations ==="
-        find / -name 'progtest.m4' -o -name 'pkg.m4' -o -name 'iconv.m4' 2>/dev/null | sort -u || true
-        M4DIRS="$(find / -name 'progtest.m4' 2>/dev/null -exec dirname {} \; | sort -u | tr '\n' ':')"
-        export ACLOCAL_PATH="${M4DIRS}${ACLOCAL_PATH:+:$ACLOCAL_PATH}"
-        echo "ACLOCAL_PATH=$ACLOCAL_PATH"
-        if [ -z "$M4DIRS" ]; then
-          echo "::error::progtest.m4 absent from the whole MSYS2 tree -- gettext autoconf macros are in a package we haven't named; see the pacman -Ql listing above."
-          exit 1
-        fi
+        # Round-5 diagnostic settled it: the base `gettext` package
+        # installs progtest.m4 (+ the other gettext macros) into
+        # /usr/share/aclocal, and pkgconf installs pkg.m4 there too --
+        # aclocal's default search dir. So the macro problem is already
+        # solved by having `gettext` + `pkgconf` in the MSYS2 install
+        # list; no ACLOCAL_PATH hunting needed. Point ACLOCAL_PATH at
+        # the two known dirs as belt-and-suspenders (fast, fixed paths
+        # -- NOT `find /`, which crawls all of C:\ for ~28min and, under
+        # msys2's set -e, aborts the step on the first permission error
+        # before build_mpv.py even runs: that was the round-5 failure).
+        export ACLOCAL_PATH="/usr/share/aclocal:/mingw64/share/aclocal${ACLOCAL_PATH:+:$ACLOCAL_PATH}"
+        ls -1 /usr/share/aclocal/progtest.m4 /usr/share/aclocal/pkg.m4 || true
         # Same self-built, version-consistent libmpv+shared-FFmpeg as
         # mac/linux -- just under the MSYS2 MINGW64 toolchain. No
         # third-party prebuilts.
