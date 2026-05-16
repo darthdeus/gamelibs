@@ -111,6 +111,73 @@ def clone_mpv_build(work: Path) -> Path:
     return mb
 
 
+def patch_out_mpv_build_libass(mb: Path):
+    """Windows only: comment out mpv-build's two libass invocation
+    lines in its `build` script so it does NOT autotools-build libass.
+
+    Why: libass's autogen.sh -> autoreconf -> aclocal hits an
+    msys2/perl path-canonicalization bug -- aclocal naively strips the
+    drive letter from its acdir, so /usr/share/aclocal is searched as a
+    bogus drive-rooted path and progtest.m4 "does not exist" though it
+    is present. Six CI rounds of shims (ACLOCAL_PATH, --system-acdir,
+    automake 1.16, /etc/fstab, install relocation + symlink) each hit a
+    different facet of the same msys path mangling. The durable fix is
+    to take autotools out of the libass path entirely: build libass
+    with Meson (build_libass_meson), exactly as upstream mpv CI does on
+    Windows. meson never invokes aclocal, so the failure class is gone.
+
+    Only the two simple invocation lines are commented (not any line
+    containing 'libass' -- that earlier broke function bodies). They
+    are plain `scripts/libass-config` / `scripts/libass-build "$@"`
+    lines; commenting them is safe. mac/linux keep the autotools libass
+    path (proven green) -- this is Windows-only."""
+    build_script = mb / "build"
+    out = []
+    for ln in build_script.read_text().splitlines():
+        s = ln.strip()
+        if s in ("scripts/libass-config", 'scripts/libass-build "$@"'):
+            out.append("# [build_mpv.py] libass via meson: " + ln)
+        else:
+            out.append(ln)
+    write_lf(build_script, "\n".join(out) + "\n")
+
+
+def build_libass_meson(mb: Path):
+    """Windows only: build the libass mpv-build cloned (at the pinned
+    release tag, via config/branch-libass) with Meson, static, into
+    mpv-build's build_libs prefix. ffmpeg-config / mpv-config prepend
+    build_libs/lib/pkgconfig to PKG_CONFIG_PATH, so mpv's mandatory
+    `dependency('libass')` resolves to this static build and links it
+    into libmpv -- same end state as the autotools path on mac/linux,
+    just without aclocal."""
+    src = mb / "libass"
+    if not src.exists():
+        raise SystemExit(
+            f"libass source not at {src} -- mpv-build ./update did not "
+            "clone it; cannot meson-build libass.")
+    prefix = mb / "build_libs"
+    bdir = src / "build"
+    if bdir.exists():
+        shutil.rmtree(bdir)
+    # Minimal option set: static lib so it links INTO libmpv; let
+    # font backend auto-detect (fontconfig is in the MSYS2 dep set).
+    # Avoid passing libass-specific -D names that vary by version
+    # ("Unknown option" aborts meson) -- builtins only.
+    run(["meson", "setup", "build",
+         f"--prefix={prefix.as_posix()}",
+         "--libdir=lib",
+         "--default-library=static",
+         "--buildtype=release"], cwd=src)
+    run(["meson", "compile", "-C", "build"], cwd=src)
+    run(["meson", "install", "-C", "build"], cwd=src)
+    pc = prefix / "lib" / "pkgconfig" / "libass.pc"
+    if not pc.exists():
+        raise SystemExit(
+            f"libass.pc not installed at {pc} after meson install -- "
+            "mpv's dependency('libass') would fail to resolve.")
+    print(f"  libass (meson, static) -> {prefix}", flush=True)
+
+
 def write_options(mb: Path):
     # mpv-build APPENDS this file to its own ffmpeg defaults
     # (--enable-static --disable-shared --enable-gpl --enable-gnutls ...);
@@ -332,16 +399,26 @@ def main():
     mb = clone_mpv_build(work)
     write_options(mb)
     jobs = str(os.cpu_count() or 4)
-    # ./rebuild does: update -> build ffmpeg -> build mpv, honoring the
-    # *_options files written above. mpv-build's scripts are POSIX sh;
-    # on Windows we run under an MSYS2 MINGW64 shell, but Python's
-    # subprocess uses CreateProcess (no shebang honoring) so the script
-    # must be launched through `sh` explicitly. On unix the shebang
-    # works directly.
-    rebuild = (["sh", "./rebuild", "-j" + jobs]
-               if plat == "windows"
-               else ["./rebuild", "-j" + jobs])
-    run(rebuild, cwd=mb)
+    # mpv-build's scripts are POSIX sh; on Windows we run under an MSYS2
+    # MINGW64 shell, but Python's subprocess uses CreateProcess (no
+    # shebang honoring) so scripts must be launched through `sh`. On
+    # unix the shebang works directly.
+    #
+    # unix: ./rebuild = update -> build (ffmpeg + libass autotools +
+    # libplacebo + mpv), proven green on mac/linux.
+    #
+    # windows: split the phases. ./update clones all sources at the
+    # pinned refs; then build libass with Meson (autotools/aclocal is
+    # broken under msys2 -- see patch_out_mpv_build_libass) and comment
+    # mpv-build's own libass steps; then ./build compiles ffmpeg +
+    # libplacebo + mpv, which find the meson libass via pkg-config.
+    if plat == "windows":
+        run(["sh", "./update"], cwd=mb)
+        patch_out_mpv_build_libass(mb)
+        build_libass_meson(mb)
+        run(["sh", "./build", "-j" + jobs], cwd=mb)
+    else:
+        run(["./rebuild", "-j" + jobs], cwd=mb)
     stage(mb, prefix)
 
     print("\n=== staged ===", flush=True)

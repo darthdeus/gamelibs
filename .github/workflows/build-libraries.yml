@@ -763,18 +763,6 @@ jobs:
       with:
         msystem: MINGW64
         update: true
-        # Install to D:\msys64 instead of the default RUNNER_TEMP
-        # (D:\a\_temp\msys64). Reason: libass autoreconf -> aclocal
-        # canonicalizes its acdir into the Windows path then naively
-        # strips the drive letter (a msys-perl/runtime bug, not mount-
-        # aware). With the default root the result is `/a/_temp/...`
-        # and `/a` is cygwin's automount for the nonexistent drive A:
-        # -- unshimmable (single-letter /X is reserved for drives).
-        # With root D:\msys64 the stripped path is `/msys64/...`, a
-        # normal multi-char path we CAN remap with a symlink to /
-        # (done in the build step). D: has the build space; C: does
-        # not. Keeps the build_mpv.py path identical to mac/linux.
-        location: D:\
         # mpv-build compiles ffmpeg + libass + libplacebo + mpv from
         # our pinned sources; these are its toolchain + the libass/
         # libplacebo dependencies (same role as the ubuntu apt /
@@ -809,35 +797,13 @@ jobs:
       if: steps.cache-mpv.outputs.cache-hit != 'true'
       shell: msys2 {0}
       run: |
-        # libass's autogen.sh runs autoreconf -> aclocal. progtest.m4
-        # (gettext) and pkg.m4 (pkgconf) ARE in /usr/share/aclocal --
-        # the failure is NOT a missing file, NOT an automake version
-        # regression (aclocal-1.16 reproduced it identically), and NOT
-        # fixable via fstab (cygwin's drive automount shadows it). The
-        # msys2 runtime, when aclocal canonicalizes its acdir, returns
-        # the Windows path then NAIVELY strips the drive letter (not
-        # mount-aware). With MSYS2 relocated to D:\msys64 (see Setup
-        # MSYS2 step) that yields `/msys64/usr/share/aclocal` -- a
-        # normal multi-char path (NOT the old `/a/...`, which collided
-        # with the reserved single-letter drive automount and was
-        # unshimmable). Now one symlink fixes it: /msys64 -> / (the
-        # msys root). aclocal's `/msys64/usr/share/aclocal/progtest.m4`
-        # then resolves to the real /usr/share/aclocal. The symlink is
-        # on disk in the msys root, so every child process (the `sh
-        # ./rebuild` build_mpv.py spawns, autoreconf, aclocal) sees it.
-        # Path derived via cygpath, not hardcoded.
-        WINROOT=$(cygpath -m / | sed 's#/*$##')                  # D:/msys64
-        STRIP="/$(echo "$WINROOT" | sed -E 's#^[A-Za-z]:/##')"   # /msys64
-        if [ "$STRIP" != "/" ] && [ ! -e "$STRIP" ]; then
-          ln -sfn / "$STRIP"
-          echo "drive-strip shim: $STRIP -> /"
-        fi
-        bash -c "ls -1 '$STRIP/usr/share/aclocal/progtest.m4'" || true
-        export ACLOCAL_PATH="/usr/share/aclocal:/mingw64/share/aclocal${ACLOCAL_PATH:+:$ACLOCAL_PATH}"
-        ls -1 /usr/share/aclocal/progtest.m4 /usr/share/aclocal/pkg.m4 || true
-        # Same self-built, version-consistent libmpv+shared-FFmpeg as
-        # mac/linux -- just under the MSYS2 MINGW64 toolchain. No
-        # third-party prebuilts.
+        # Self-built, version-consistent libmpv + shared FFmpeg under
+        # the MSYS2 MINGW64 toolchain (no third-party prebuilts). libass
+        # is built with Meson here (build_mpv.py, Windows path) instead
+        # of mpv-build's autotools step: libass autogen.sh -> aclocal
+        # hits an unfixable msys2 path-canonicalization bug (six prior
+        # shim rounds). Meson never invokes aclocal, removing the whole
+        # failure class. No aclocal/autotools env shims needed anymore.
         python build_mpv.py
         echo "libmpv+FFmpeg built (pinned, version-consistent, mingw)"
 
