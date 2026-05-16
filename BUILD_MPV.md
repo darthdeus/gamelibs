@@ -259,6 +259,31 @@ have the constant-key bug — out of scope here, but they silently never
 rebuild on macOS until someone bumps `CACHE_VERSION`. Worth a separate
 gamelibs cleanup.
 
+### Windows vcruntime140 gap (pre-existing, repo-wide, fixed post-v0.6.3)
+
+Found while verifying the v0.6.3 Windows bundle. The 6 **MSVC**-built
+DLLs (`SDL2_image`, `SDL2_mixer`, `cimgui_complete`, `freetype`,
+`lua51`, `soloud`) were `/MD` (dynamic CRT) and imported
+`vcruntime140.dll` (+ `vcruntime140_1.dll` for cimgui) — the VC++
+2015–2022 redistributable runtime, **not guaranteed on a clean Windows
+10/11 box** (UCRT *is* an OS component; `vcruntime140` is not;
+`msvcp140` was not imported — C++ stdlib was already static). Not
+introduced by the mpv work and **not in the libmpv/FFmpeg chain**
+(that stack is MinGW → `msvcrt.dll`, an OS component — fully
+self-contained).
+
+Resolved by **static-linking the VC++ CRT (`/MT`)** rather than
+shipping the redist DLLs — zero MS-runtime redistribution surface (no
+VS license clause, nothing for the consumer or Steam Common
+Redistributables to install). CMake libs:
+`-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded` +
+`-DCMAKE_POLICY_DEFAULT_CMP0091=NEW` at **every** cmake site (incl.
+statically-linked zlib/libpng/ogg/vorbis/… — else CRT mixing within a
+DLL); cimgui `cl /MD→/MT`; LuaJIT submodule `msvcbuild.bat` patched at
+build time. `CACHE_VERSION` v1→v2 (all jobs) forces the clean rebuild.
+Assumes Windows 10+ (UCRT as OS component); pre-Win10 consumers would
+also need the UCRT redist — acceptable floor for a modern game-lib repo.
+
 ### Packaging bugs found at consumer install (v0.6.0) — Linux fixed v0.6.1, macOS pending v0.6.2
 
 1. **No `.pc` files shipped.** FFmpeg installs pkgconfig under
