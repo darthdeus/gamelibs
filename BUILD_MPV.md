@@ -157,16 +157,44 @@ a valid MSYS mount. Uniform on every platform: smaller libmpv, one
 fewer dep, no behaviour change for our use cases. If subtitles are
 ever needed, revisit with a non-autotools libass path.
 
-### Phase 3 — Windows x86_64 — self-built via MSYS2 — IN PROGRESS
+### Phase 3 — Windows x86_64 — self-built via MSYS2 — DONE (run 25960133197)
 
-Implemented (iterating in CI via master pushes; release only once green):
-`build_mpv.py` has a `stage_windows()` (DLLs→bin, import libs+pkgconfig
-→lib, no rpath/symlinks) and launches `./rebuild` via `sh` (CreateProcess
-won't honor the shebang). `build-windows` job: `msys2/setup-msys2`
-(MINGW64 + toolchain/meson/ninja/nasm + libass/libplacebo deps), cached
-`shell: msys2 {0}` build step, same `git hash-object` cache key. Same
-pinned sources, dynamic shared, no third-party prebuilts. Diagnosing
-over the CI loop like mac/linux did.
+All three platforms green with real artifacts (Windows: `libmpv-2.dll`
++ `av*/sw*/postproc` DLLs, FFmpeg n7.1.1 ABI — `avcodec-61` etc. —
+consistent with mac/linux). `build_mpv.py` `stage_windows()` (DLLs→bin,
+import libs+pkgconfig→lib) + `build-windows` job (`msys2/setup-msys2`
+MINGW64, `shell: msys2 {0}`, `git hash-object` cache key).
+
+Windows-specific divergence from the unix `./rebuild` path (all in
+`build_mpv.py` `main()`, gated `if plat == "windows"`):
+
+- **libass via Meson, not autotools.** mpv-build's autotools libass
+  (`autogen.sh`→`autoreconf`→`aclocal`) is unfixable under MSYS2: the
+  runtime drive-strips aclocal's canonicalized acdir so
+  `/usr/share/aclocal` is searched at a bogus drive-rooted path and
+  `progtest.m4` "does not exist" though present. Six shim rounds
+  (`ACLOCAL_PATH`, `--system-acdir`, automake 1.16, `/etc/fstab`,
+  install relocation + symlink) each hit a different facet — abandoned.
+  `main()` splits `./rebuild` into `./update` →
+  `patch_out_mpv_build_libass` (comment mpv-build's two libass
+  invocation lines) → `build_libass_meson` (static, into `build_libs`)
+  → `./build`. Meson never invokes aclocal. mac/linux keep autotools
+  libass (proven green) — unchanged.
+- **`unset PKG_CONFIG_PATH`** in the build step. `actions/setup-python`
+  exports a `C:\…\lib/pkgconfig` Windows path; mpv-build's `*-config`
+  scripts append `build_libs/lib/pkgconfig` with a POSIX `:` sep, and
+  the inherited `C:` drive-colon makes the list unparseable to pkgconf
+  → mpv couldn't see ffmpeg's `libav*.pc`. Empty → clean msys path;
+  mingw deps resolve via pkgconf's built-in `/mingw64` dir.
+
+Also fixed this round (were breaking *all* platforms / masking macOS):
+newline-joined `ffmpeg_options` (mpv-build splits `IFS=<newline>`;
+single-line collapsed to one argv → `eval: __disable_static`);
+`write_lf()` for all generated files (mingw-python CRLF left `\r` on
+every option → meson "Option libmpv value true"); libass kept (mpv
+0.40 hard-requires it, no `-Dlibass` option); macOS `mpv-hash` added
+to its cache-keys step (was empty → constant key → macOS shipped a
+stale pre-regression libmpv and reported false green).
 
 Original design notes (still the rationale):
 
@@ -287,6 +315,10 @@ release-minor` again (→ v0.6.1).
 
 ## Status
 
-Phase 1 in progress. Nothing shipped yet. rock-sfx interim: until
-Phase 1's build.rs lands, `brew reinstall --build-from-source mpv`
-realigns Homebrew mpv with current ffmpeg and unblocks fm audio.
+CI green on all three platforms with real artifacts (run 25960133197,
+master `<this commit>`). Phases 1–3 done; **not yet released**. Next
+(Phase 4): `make release-minor` to publish per-platform zips, then the
+rock-sfx consumer cutover (`stone-video/build.rs` → vendored prefix,
+delete the pkg-config fallback). Until that lands, the rock-sfx
+interim remains `brew reinstall --build-from-source mpv` to realign
+Homebrew mpv with current ffmpeg and unblock fm audio.
