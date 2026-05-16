@@ -799,26 +799,33 @@ jobs:
       run: |
         # libass's autogen.sh runs autoreconf -> aclocal. progtest.m4
         # (gettext) and pkg.m4 (pkgconf) ARE in /usr/share/aclocal --
-        # the failure is NOT a missing file. It is an automake-1.18
-        # regression under msys-perl: aclocal canonicalizes its system
-        # acdir through a realpath that yields a Windows path, then
-        # drops the drive letter, so `/usr/share/aclocal` is searched
-        # as `/a/_temp/msys64/usr/share/aclocal` -- and MSYS2 automounts
-        # drives, so a leading `/a/...` resolves to the nonexistent
-        # drive A:, hence "file ... does not exist". --system-acdir
-        # doesn't help (same canonicalization mangles whatever we pass),
-        # and the doubled path can't be shimmed (you cannot mkdir /a;
-        # it IS drive A:). The fix is to sidestep the regressed tool:
-        # pin aclocal/automake to the long-stable 1.16 (shipped by the
-        # MSYS2 automake1.16 package, in the install list). 1.16
-        # predates the realpath change and resolves /usr/share/aclocal
-        # correctly. autoreconf + libass autogen.sh honor $ACLOCAL /
-        # $AUTOMAKE. This is the actual root of the Windows libass
-        # blocker (six prior rounds chased the symptom, not 1.18).
-        export ACLOCAL="aclocal-1.16 --system-acdir=/usr/share/aclocal"
-        export AUTOMAKE="automake-1.16"
+        # the failure is NOT a missing file, and NOT an automake
+        # version regression (aclocal-1.16 reproduced it identically).
+        # The msys2 runtime, when aclocal canonicalizes its acdir via
+        # perl realpath, returns the Windows path of the dir then drops
+        # the drive letter: /usr/share/aclocal (= D:\a\_temp\msys64\
+        # usr\share\aclocal, since / is mounted at D:\a\_temp\msys64 on
+        # the runner) becomes `/a/_temp/msys64/usr/share/aclocal`. MSYS2
+        # automounts drives, so a leading single-letter `/a/...` is read
+        # as the nonexistent drive A: -> "file does not exist". It is
+        # unshimmable as a path (you cannot mkdir /a; it IS drive A:),
+        # and --system-acdir / a different automake version don't help
+        # (same runtime canonicalization). The robust fix: add an
+        # /etc/fstab entry mapping that exact mangled mountpoint back to
+        # the real Windows root. fstab is re-read by every new msys
+        # process, including the `sh ./rebuild` child build_mpv.py
+        # spawns, so aclocal's lookup then resolves to the real dir.
+        # Path derived via cygpath, not hardcoded.
+        WINROOT=$(cygpath -m /)                                  # D:/a/_temp/msys64
+        STRIP="/$(echo "$WINROOT" | sed -E 's#^[A-Za-z]:/##')"   # /a/_temp/msys64
+        if [ "$STRIP" != "/" ] && ! grep -qF " $STRIP " /etc/fstab 2>/dev/null; then
+          echo "$WINROOT $STRIP ntfs binary,posix=0,noacl 0 0" >> /etc/fstab
+          echo "fstab shim: $STRIP -> $WINROOT"
+        fi
+        # New msys process picks up the fstab entry; verify the once-
+        # mangled path now resolves before the long build.
+        bash -c "ls -1 '$STRIP/usr/share/aclocal/progtest.m4'" || true
         export ACLOCAL_PATH="/usr/share/aclocal:/mingw64/share/aclocal${ACLOCAL_PATH:+:$ACLOCAL_PATH}"
-        aclocal-1.16 --version | head -1
         ls -1 /usr/share/aclocal/progtest.m4 /usr/share/aclocal/pkg.m4 || true
         # Same self-built, version-consistent libmpv+shared-FFmpeg as
         # mac/linux -- just under the MSYS2 MINGW64 toolchain. No
