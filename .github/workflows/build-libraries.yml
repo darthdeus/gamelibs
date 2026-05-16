@@ -797,16 +797,21 @@ jobs:
       if: steps.cache-mpv.outputs.cache-hit != 'true'
       shell: msys2 {0}
       run: |
-        # Round-5 diagnostic settled it: the base `gettext` package
-        # installs progtest.m4 (+ the other gettext macros) into
-        # /usr/share/aclocal, and pkgconf installs pkg.m4 there too --
-        # aclocal's default search dir. So the macro problem is already
-        # solved by having `gettext` + `pkgconf` in the MSYS2 install
-        # list; no ACLOCAL_PATH hunting needed. Point ACLOCAL_PATH at
-        # the two known dirs as belt-and-suspenders (fast, fixed paths
-        # -- NOT `find /`, which crawls all of C:\ for ~28min and, under
-        # msys2's set -e, aborts the step on the first permission error
-        # before build_mpv.py even runs: that was the round-5 failure).
+        # libass's autogen.sh runs autoreconf -> aclocal. The macros it
+        # needs (progtest.m4 from gettext, pkg.m4 from pkgconf) ARE in
+        # /usr/share/aclocal (verified by the ls below). The failure is
+        # NOT a missing file: aclocal-1.18's compiled-in *system acdir*
+        # resolves to a DOUBLED path under the GitHub runner's
+        # D:\a\_temp\msys64 mount -- it searches
+        # `/a/_temp/msys64/usr/share/aclocal` (= the mount root prefixed
+        # onto itself), which does not exist, so `progtest.m4 does not
+        # exist` even though /usr/share/aclocal/progtest.m4 is right
+        # there. ACLOCAL_PATH only *appends* dirs; it cannot fix the
+        # broken built-in system dir aclocal scans first. The fix is to
+        # pin the system acdir to the clean msys path via $ACLOCAL,
+        # which autoreconf (and libass autogen.sh) honor. This is the
+        # actual root of the six-round Windows libass blocker.
+        export ACLOCAL="aclocal --system-acdir=/usr/share/aclocal"
         export ACLOCAL_PATH="/usr/share/aclocal:/mingw64/share/aclocal${ACLOCAL_PATH:+:$ACLOCAL_PATH}"
         ls -1 /usr/share/aclocal/progtest.m4 /usr/share/aclocal/pkg.m4 || true
         # Same self-built, version-consistent libmpv+shared-FFmpeg as
