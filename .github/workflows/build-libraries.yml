@@ -349,15 +349,29 @@ jobs:
 
     - name: Cache libmpv+FFmpeg build
       id: cache-mpv
+      # Skip the cache on tag builds: a cache HIT restores only the
+      # globbed paths, never the recursively-vendored font/codec libs
+      # (libfontconfig.so.* etc. -- arbitrary sonames), so the release
+      # zip would ship libmpv without its bundled deps (Bug 3). Tag
+      # builds always full-rebuild -> complete, self-contained bundle.
+      if: ${{ !startsWith(github.ref, 'refs/tags/') }}
       uses: actions/cache@v4
       with:
         path: |
           prebuilt/linux/x86_64/lib/libmpv*
           prebuilt/linux/x86_64/lib/libav*
           prebuilt/linux/x86_64/lib/libsw*
+          prebuilt/linux/x86_64/lib/libpostproc*
+          prebuilt/linux/x86_64/lib/pkgconfig/mpv.pc
+          prebuilt/linux/x86_64/lib/pkgconfig/libav*
+          prebuilt/linux/x86_64/lib/pkgconfig/libsw*
+          prebuilt/linux/x86_64/lib/pkgconfig/libpostproc*
+          prebuilt/linux/x86_64/lib/pkgconfig/libplacebo.pc
+          prebuilt/linux/x86_64/lib/pkgconfig/libass.pc
           prebuilt/linux/x86_64/include/mpv
           prebuilt/linux/x86_64/include/libav*
           prebuilt/linux/x86_64/include/libsw*
+          prebuilt/linux/x86_64/include/libpostproc*
         key: mpv-ubuntu-${{ steps.cache-keys.outputs.mpv-hash }}
 
     - name: Build libmpv+FFmpeg
@@ -741,20 +755,37 @@ jobs:
 
     - name: Cache libmpv+FFmpeg build
       id: cache-mpv
+      # See the ubuntu job: skip on tag builds so releases full-rebuild
+      # and ship the recursively-vendored mingw font DLLs (Bug 3).
+      if: ${{ !startsWith(github.ref, 'refs/tags/') }}
       uses: actions/cache@v4
       with:
+        # Targeted globs (not the whole bin/ or pkgconfig/ -- those are
+        # shared with SDL2/etc. built in the same job; a whole-dir
+        # cache under the mpv key would restore stale sibling libs).
+        # Recursively-vendored mingw font DLLs are intentionally NOT
+        # cached: they have arbitrary sonames and are only needed in
+        # shipped (tag) bundles, which skip the cache and full-rebuild.
         path: |
           prebuilt/windows/x86_64/bin/mpv*.dll
+          prebuilt/windows/x86_64/bin/libmpv*.dll
           prebuilt/windows/x86_64/bin/av*.dll
           prebuilt/windows/x86_64/bin/sw*.dll
+          prebuilt/windows/x86_64/bin/postproc*.dll
           prebuilt/windows/x86_64/lib/libmpv*
           prebuilt/windows/x86_64/lib/libav*
           prebuilt/windows/x86_64/lib/libsw*
+          prebuilt/windows/x86_64/lib/libpostproc*
           prebuilt/windows/x86_64/lib/pkgconfig/mpv.pc
           prebuilt/windows/x86_64/lib/pkgconfig/libav*
+          prebuilt/windows/x86_64/lib/pkgconfig/libsw*
+          prebuilt/windows/x86_64/lib/pkgconfig/libpostproc*
+          prebuilt/windows/x86_64/lib/pkgconfig/libplacebo.pc
+          prebuilt/windows/x86_64/lib/pkgconfig/libass.pc
           prebuilt/windows/x86_64/include/mpv
           prebuilt/windows/x86_64/include/libav*
           prebuilt/windows/x86_64/include/libsw*
+          prebuilt/windows/x86_64/include/libpostproc*
         key: mpv-windows-x86_64-${{ steps.cache-keys.outputs.mpv-hash }}
 
     - name: Setup MSYS2 (libmpv+FFmpeg toolchain)
@@ -1145,15 +1176,28 @@ jobs:
 
     - name: Cache libmpv+FFmpeg build
       id: cache-mpv
+      # See the ubuntu job: skip on tag builds so releases full-rebuild
+      # and ship the recursively-vendored Homebrew dylibs (Bug 3 -- the
+      # original symptom: run 25960133197's macOS cache HIT shipped a
+      # bundle with zero .pc and partial libav*).
+      if: ${{ !startsWith(github.ref, 'refs/tags/') }}
       uses: actions/cache@v4
       with:
         path: |
           prebuilt/macos/arm64/lib/libmpv*
           prebuilt/macos/arm64/lib/libav*
           prebuilt/macos/arm64/lib/libsw*
+          prebuilt/macos/arm64/lib/libpostproc*
+          prebuilt/macos/arm64/lib/pkgconfig/mpv.pc
+          prebuilt/macos/arm64/lib/pkgconfig/libav*
+          prebuilt/macos/arm64/lib/pkgconfig/libsw*
+          prebuilt/macos/arm64/lib/pkgconfig/libpostproc*
+          prebuilt/macos/arm64/lib/pkgconfig/libplacebo.pc
+          prebuilt/macos/arm64/lib/pkgconfig/libass.pc
           prebuilt/macos/arm64/include/mpv
           prebuilt/macos/arm64/include/libav*
           prebuilt/macos/arm64/include/libsw*
+          prebuilt/macos/arm64/include/libpostproc*
         key: mpv-macos-arm64-${{ steps.cache-keys.outputs.mpv-hash }}
 
     - name: Build libmpv+FFmpeg

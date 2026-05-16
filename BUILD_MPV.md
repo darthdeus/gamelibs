@@ -252,8 +252,10 @@ constant `<lib>-macos-v1-` (empty hash). Effect: macOS lib caches never
 invalidate on source change; v0.6.1's `.pc`/symlink fixes built on
 Linux but macOS `Build libmpv+FFmpeg` was `skipped` (stale v0.6.0
 restored). Fixed for the mpv key only by switching to `git hash-object`
-(portable, deterministic). The other libs (SDL2/freetype/…) still have
-the constant-key bug — out of scope here, but they silently never
+(portable, deterministic). Additionally, the mpv cache step is now
+skipped entirely on tag builds (Bug 3 fix) so a release can never ship
+a partial cache-restored bundle. The other libs (SDL2/freetype/…) still
+have the constant-key bug — out of scope here, but they silently never
 rebuild on macOS until someone bumps `CACHE_VERSION`. Worth a separate
 gamelibs cleanup.
 
@@ -277,15 +279,43 @@ release-minor` again (→ v0.6.1).
 
 ### Phase 4 — Release + consumer cutover
 
-> **Blocked on three consumer-found bugs — see
-> `CONSUMER_CUTOVER_FIXES.md`** (relocatable `.pc`, libmpv hard-links
-> Homebrew dylibs, cache-hit ships incomplete macOS bundle). Fix those
-> before releasing; the rock-sfx side is proven working in parallel
-> only via local workarounds for the `.pc` bug.
+> **Three consumer-found bugs fixed in code (`build_mpv.py` +
+> workflow); release pending.** See `CONSUMER_CUTOVER_FIXES.md`.
 
-- [ ] Fix the three bugs in `CONSUMER_CUTOVER_FIXES.md`.
-- [ ] `make release-minor` (new lib = minor bump), push tag, CI
-      publishes per-platform zips.
+- [x] **Bug 1 — relocatable `.pc`.** `make_pc_relocatable()` rewrites
+      every staged `.pc`'s `prefix`/`exec_prefix`/`libdir`/`includedir`
+      to `${pcfiledir}`-relative (prefix = `${pcfiledir}/../..`). Called
+      from both `stage()` and `stage_windows()`; `Requires`/`Libs`/
+      `Cflags` left intact. Verified locally against ffmpeg-style
+      (absolute) and meson-style (`/opt/homebrew`) `.pc`.
+- [x] **Bug 2 — self-contained libmpv. Chose option (a): bundle.**
+      `fix_macos_install_names()` now recursively vendors every
+      `/opt/homebrew` + `/usr/local` dep into `<prefix>/lib` with
+      `-id @rpath/<name>` and re-points all referrers (worklist walk:
+      harfbuzz→graphite2/glib, fontconfig→expat/png/freetype, …), then
+      asserts no external dep remains. Linux: `fix_linux_rpath()`
+      vendors the libass font/codec stack via an **allowlist** of
+      sonames (`_LINUX_VENDOR_STEMS`) — GPU/display libs
+      (GL/X11/wayland/vulkan/drm) are deliberately left system.
+      Windows: `bundle_windows_deps()` recursively copies the mingw
+      font DLLs (libass is static-in-libmpv; its harfbuzz/fribidi/
+      fontconfig/freetype/lcms2 are dynamic) into `bin/`, skipping the
+      Windows system dir. Each platform has a post-bundle leak assert.
+- [x] **Bug 3 — cache-hit completeness.** mpv cache `path:` on all
+      three jobs broadened to libpostproc + `pkgconfig/{mpv,libav*,
+      libsw*,libpostproc*,libplacebo,libass}.pc` + matching headers
+      (targeted globs, not whole `bin/`/`pkgconfig/` — those are shared
+      with SDL2/etc. in the same job). The recursively-vendored
+      font/codec libs have arbitrary sonames and can't be globbed, so
+      the cache step is also **skipped on tag builds**
+      (`if: !startsWith(github.ref,'refs/tags/')`) → every release
+      full-rebuilds into a complete, self-contained bundle. Dev/branch
+      cache hits stay fast (bundled-dep gap is irrelevant: not shipped).
+- [ ] **Release** — version decision pending (`.version`=0.6.2;
+      `CONSUMER_CUTOVER_FIXES.md` rock-sfx parked note expects v0.6.3
+      patch, this section originally said minor bump). Confirm with
+      human, then `make release[-minor]`, push tag, CI publishes
+      per-platform zips.
 - [ ] rock-sfx: `make download` refresh; delete the
       `pkg_config`-fallback branch in `stone-video/build.rs` once all
       three platforms ship vendored (fallback existed only to bridge
@@ -322,9 +352,12 @@ release-minor` again (→ v0.6.1).
 
 ## Status
 
-CI green on all three platforms with real artifacts (run 25960133197,
-master `<this commit>`). Phases 1–3 done; **not yet released**. Next
-(Phase 4): `make release-minor` to publish per-platform zips, then the
+CI green on all three platforms with real artifacts (run 25960133197).
+Phases 1–3 done. **Phase 4: the three consumer-cutover bugs are fixed
+in code** (relocatable `.pc`; recursive external-dep bundling on
+mac/linux/windows — option (a); cache skipped on tag builds) — see the
+Phase 4 checklist above. Not yet released: awaiting the version
+decision, then a tag build publishes per-platform zips, then the
 rock-sfx consumer cutover (`stone-video/build.rs` → vendored prefix,
 delete the pkg-config fallback). Until that lands, the rock-sfx
 interim remains `brew reinstall --build-from-source mpv` to realign

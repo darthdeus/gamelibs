@@ -219,6 +219,45 @@ def write_options(mb: Path):
     # (config/branch-libass). See clone_mpv_build() / LIBASS_REF.
 
 
+def make_pc_relocatable(pcdir: Path):
+    """Rewrite every staged `.pc` so it is self-locating from wherever
+    the prefix is extracted, instead of baking the CI build host's
+    absolute paths (Bug 1, CONSUMER_CUTOVER_FIXES.md).
+
+    ffmpeg's `.pc` bake an absolute `prefix`/`libdir`/`includedir`
+    pointing at the runner's `build_libs` (nonexistent on any consumer);
+    meson's `mpv.pc` bakes the build host's brew `prefix=/opt/homebrew`
+    with `libdir=${prefix}/lib` -- a consumer that points
+    PKG_CONFIG_PATH at the vendored prefix would then link *Homebrew's*
+    libmpv, recreating the exact ABI-skew crash this vendoring prevents.
+
+    `${pcfiledir}` is a pkg-config/pkgconf builtin = the dir containing
+    the `.pc` file (here `<prefix>/lib/pkgconfig`), so `../..` is the
+    prefix root with zero consumer env. Only the three location
+    variables are rewritten; `Requires`/`Libs`/`Cflags` already use
+    `${libdir}`/`${includedir}` (ffmpeg's do) and are left intact."""
+    repl = {
+        "prefix": "${pcfiledir}/../..",
+        "libdir": "${prefix}/lib",
+        "includedir": "${prefix}/include",
+        # exec_prefix is ${prefix}-relative in both ffmpeg & meson .pc;
+        # normalize defensively in case a generator baked it absolute.
+        "exec_prefix": "${prefix}",
+    }
+    for pc in sorted(pcdir.glob("*.pc")):
+        out = []
+        for ln in pc.read_text().splitlines():
+            key = ln.split("=", 1)[0].strip() if "=" in ln else None
+            # Only a leading `key=...` assignment (not `Cflags:` etc.,
+            # not an indented continuation) is a location variable.
+            if key in repl and ln.lstrip().startswith(key):
+                out.append(f"{key}={repl[key]}")
+            else:
+                out.append(ln)
+        write_lf(pc, "\n".join(out) + "\n")
+        print(f"  relocatable: {pc.name}", flush=True)
+
+
 def stage(mb: Path, prefix: Path):
     lib = prefix / "lib"
     inc = prefix / "include"
@@ -286,6 +325,8 @@ def stage(mb: Path, prefix: Path):
     if mpv_pc.exists():
         shutil.copy2(mpv_pc, lib / "pkgconfig" / "mpv.pc")
 
+    make_pc_relocatable(lib / "pkgconfig")
+
     if plat == "macos":
         fix_macos_install_names(lib)
     elif plat == "linux":
@@ -352,39 +393,243 @@ def stage_windows(mb: Path, prefix: Path):
     if mpv_pc.exists():
         shutil.copy2(mpv_pc, lib / "pkgconfig" / "mpv.pc")
 
+    make_pc_relocatable(lib / "pkgconfig")
+    bundle_windows_deps(binr)
+
     print("  windows: staged DLLs ->", binr, "import libs ->", lib)
 
 
+def _otool_deps(dylib: Path) -> list[str]:
+    out = subprocess.run(
+        ["otool", "-L", str(dylib)], capture_output=True, text=True,
+        check=True).stdout
+    # otool's first line is the file itself; the rest are deps. Each
+    # dep line is `\t<path> (compatibility ...)`.
+    deps = []
+    for line in out.splitlines()[1:]:
+        dep = line.strip().split(" ", 1)[0]
+        if dep:
+            deps.append(dep)
+    return deps
+
+
 def fix_macos_install_names(lib: Path):
-    """Rewrite each dylib's id + inter-lib refs to @rpath/<name> so a
-    consumer's -rpath,@loader_path/... resolves the whole set with no
-    absolute build paths baked in (mirrors how build_sdl_image stages
-    its deps)."""
+    """Make the staged set self-contained on macOS (Bug 2):
+
+    1. Rewrite each staged dylib's id + inter-lib refs to `@rpath/<name>`
+       so a consumer's `-rpath,@loader_path/...` resolves the whole set
+       with no absolute build paths baked in.
+    2. Recursively vendor every external (`/opt/homebrew`, `/usr/local`)
+       dependency -- libmpv links the libass font stack
+       (fontconfig/harfbuzz/fribidi) + lcms2/jpeg from Homebrew kegs;
+       without this a machine with no Homebrew cannot load libmpv,
+       defeating "vendored / hermetic". Each external dep is copied into
+       `<prefix>/lib`, `-id @rpath/<name>`'d, every referrer `-change`'d
+       to `@rpath/<name>`, then itself scanned (harfbuzz->graphite2/glib,
+       fontconfig->expat/png/freetype, glib->pcre2/intl, ...).
+
+    Mirrors how build_sdl_image stages its deps, extended with the
+    transitive walk libmpv's richer dep graph needs."""
+    def is_external(p: str) -> bool:
+        return p.startswith("/opt/homebrew") or p.startswith("/usr/local")
+
     all_libs = [p for p in lib.iterdir() if ".dylib" in p.name]
     names = {p.name for p in all_libs}
-    # Only edit real files; symlinks resolve through them. Editing a
-    # symlink's "id" would rewrite the target repeatedly.
-    for d in [p for p in all_libs if not p.is_symlink()]:
+    edited: set[Path] = set()
+    # Worklist of real dylibs whose deps still need scanning. Symlinks
+    # resolve through their target; editing a symlink's id rewrites the
+    # target repeatedly, so only ever operate on real files.
+    queue = [p for p in all_libs if not p.is_symlink()]
+
+    while queue:
+        d = queue.pop()
+        if d in edited:
+            continue
+        edited.add(d)
         run(["install_name_tool", "-id", f"@rpath/{d.name}", str(d)])
-        out = subprocess.run(
-            ["otool", "-L", str(d)], capture_output=True, text=True, check=True
-        ).stdout
-        for line in out.splitlines()[1:]:
-            dep = line.strip().split(" ")[0]
+        for dep in _otool_deps(d):
             base = os.path.basename(dep)
-            if base in names and not dep.startswith("@rpath/"):
+            if dep.startswith("@rpath/"):
+                continue
+            if base in names:
+                # Already-staged sibling (libav*, libmpv, or a dep we
+                # vendored on an earlier iteration): just re-point.
                 run(["install_name_tool", "-change", dep,
                      f"@rpath/{base}", str(d)])
-        # Re-sign: macOS invalidates the signature on any LC edit.
+            elif is_external(dep):
+                target = lib / base
+                if base not in names:
+                    # Resolve through any keg symlink to the real file.
+                    real = Path(dep).resolve()
+                    shutil.copy2(real, target)
+                    target.chmod(0o644)
+                    run(["install_name_tool", "-id",
+                         f"@rpath/{base}", str(target)])
+                    names.add(base)
+                    queue.append(target)
+                run(["install_name_tool", "-change", dep,
+                     f"@rpath/{base}", str(d)])
+            # else: /usr/lib, /System/... -- guaranteed present, leave.
+
+    # Re-sign every edited file: macOS invalidates the signature on any
+    # load-command edit.
+    for d in edited:
         subprocess.run(["codesign", "--force", "--sign", "-", str(d)],
                         check=False)
 
+    leaks = sorted(
+        f"{d.name}: {dep}"
+        for d in edited for dep in _otool_deps(d)
+        if is_external(dep))
+    if leaks:
+        raise SystemExit(
+            "fix_macos_install_names: external deps still present after "
+            "bundling (Bug 2 acceptance failed):\n  " + "\n  ".join(leaks))
+    print(f"  macos: {len(edited)} dylibs self-contained "
+          f"(@rpath only, no /opt/homebrew or /usr/local)", flush=True)
+
+
+# libmpv's libass font stack (+ image codecs) leaks the same way on
+# Linux as the Homebrew kegs do on macOS -- the apt-installed
+# libfontconfig/harfbuzz/fribidi/lcms2/jpeg are NOT guaranteed on a
+# consumer machine. A macOS-style "anything outside /usr/lib" rule is
+# WRONG here: libGL/libX11/libwayland/libvulkan/libdrm also live in
+# /usr/lib and MUST stay system (they bind to the host's GPU driver).
+# So Linux bundling is allowlist-driven: only these soname stems (and
+# their transitive closure within the same allowlist) are vendored.
+_LINUX_VENDOR_STEMS = {
+    "fontconfig", "harfbuzz", "fribidi", "lcms2", "jpeg", "freetype",
+    "png", "png16", "graphite2", "expat", "bz2", "uuid",
+    "glib-2.0", "gobject-2.0", "gthread-2.0", "gmodule-2.0",
+    "pcre2-8", "pcre", "ffi", "intl",
+    "brotlidec", "brotlienc", "brotlicommon",
+}
+
+
+def _soname_stem(soname: str) -> str:
+    # libfontconfig.so.1 -> fontconfig ; libpcre2-8.so.0 -> pcre2-8
+    n = soname
+    if n.startswith("lib"):
+        n = n[3:]
+    return n.split(".so", 1)[0]
+
+
+def _ldd_resolved(so: Path) -> dict[str, str]:
+    """soname -> absolute resolved path, for `=> /path` ldd lines."""
+    out = subprocess.run(["ldd", str(so)], capture_output=True,
+                          text=True).stdout
+    resolved = {}
+    for line in out.splitlines():
+        line = line.strip()
+        if "=>" not in line:
+            continue
+        soname, _, rhs = line.partition("=>")
+        rhs = rhs.strip()
+        if not rhs.startswith("/"):
+            continue  # "not found" / vdso
+        path = rhs.split(" (", 1)[0].strip()
+        resolved[soname.strip()] = path
+    return resolved
+
 
 def fix_linux_rpath(lib: Path):
-    for so in lib.iterdir():
-        if ".so" in so.name and so.is_file() and not so.is_symlink():
-            subprocess.run(["patchelf", "--set-rpath", "$ORIGIN", str(so)],
-                           check=False)
+    """Set $ORIGIN rpath on the staged .so set AND recursively vendor
+    the libass font / image-codec stack (Bug 2, Linux analogue of the
+    macOS Homebrew bundling). GPU/display libs are deliberately NOT
+    bundled -- see _LINUX_VENDOR_STEMS."""
+    def staged_real():
+        return [p for p in lib.iterdir()
+                if ".so" in p.name and p.is_file() and not p.is_symlink()]
+
+    edited: set[Path] = set()
+    queue = staged_real()
+    while queue:
+        so = queue.pop()
+        if so in edited:
+            continue
+        edited.add(so)
+        subprocess.run(["patchelf", "--set-rpath", "$ORIGIN", str(so)],
+                       check=False)
+        for soname, src in _ldd_resolved(so).items():
+            if _soname_stem(soname) not in _LINUX_VENDOR_STEMS:
+                continue
+            dst = lib / soname
+            if not dst.exists():
+                shutil.copy2(Path(src).resolve(), dst)
+                dst.chmod(0o644)
+                # Match the staged soname-link convention so a
+                # DT_NEEDED `libfoo.so.1` finds it next to libmpv.
+                subprocess.run(["patchelf", "--set-rpath", "$ORIGIN",
+                                str(dst)], check=False)
+                queue.append(dst)
+
+    leaks = []
+    for so in edited:
+        for soname, src in _ldd_resolved(so).items():
+            stem = _soname_stem(soname)
+            if stem in _LINUX_VENDOR_STEMS and not (lib / soname).exists():
+                leaks.append(f"{so.name}: {soname} -> {src}")
+    if leaks:
+        raise SystemExit(
+            "fix_linux_rpath: vendorable deps still unbundled "
+            "(Bug 2 acceptance failed):\n  " + "\n  ".join(leaks))
+    print(f"  linux: {len(edited)} shared objects, $ORIGIN rpath, "
+          f"font/codec stack vendored", flush=True)
+
+
+def bundle_windows_deps(binr: Path):
+    """Copy the mingw font/codec DLLs libmpv pulls in (libass is static
+    into libmpv, but its harfbuzz/fribidi/fontconfig/freetype/lcms2 are
+    dynamic MSYS2 DLLs) into prefix/bin so the dir is self-resolving on
+    a machine without MSYS2 (Bug 2, Windows analogue). System DLLs
+    (C:\\Windows\\System32: KERNEL32, msvcrt, ...) are left alone; only
+    deps resolving under the MSYS2 tree are vendored, recursively."""
+    def msys_ldd(dll: Path) -> dict[str, str]:
+        out = subprocess.run(["sh", "-c", f"ldd '{dll.as_posix()}'"],
+                              capture_output=True, text=True).stdout
+        res = {}
+        for line in out.splitlines():
+            line = line.strip()
+            if "=>" not in line:
+                continue
+            name, _, rhs = line.partition("=>")
+            rhs = rhs.strip()
+            if not rhs:
+                continue
+            path = rhs.split(" (", 1)[0].strip()
+            low = path.lower()
+            # Skip the Windows system dir; keep MSYS2/mingw paths
+            # (/mingw64/bin, /usr/bin, C:\\msys64\\...).
+            if "/windows/" in low or "\\windows\\" in low:
+                continue
+            if path.startswith("/") or ":" in path:
+                res[name.strip()] = path
+        return res
+
+    edited: set[Path] = set()
+    queue = [p for p in binr.glob("*.dll")]
+    while queue:
+        dll = queue.pop()
+        if dll in edited or not dll.exists():
+            continue
+        edited.add(dll)
+        for name, src in msys_ldd(dll).items():
+            dst = binr / name
+            if dst.exists():
+                continue
+            sp = subprocess.run(
+                ["sh", "-c", f"cygpath -w '{src}'"],
+                capture_output=True, text=True)
+            real = sp.stdout.strip() or src
+            try:
+                shutil.copy2(real, dst)
+            except OSError as e:
+                print(f"  windows: WARN could not vendor {name} "
+                      f"({src}): {e}", flush=True)
+                continue
+            queue.append(dst)
+    print(f"  windows: bin/ self-resolving "
+          f"({len(list(binr.glob('*.dll')))} DLLs)", flush=True)
 
 
 def main():
