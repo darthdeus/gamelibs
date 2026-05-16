@@ -799,18 +799,28 @@ jobs:
       run: |
         # libass's autogen.sh runs autoreconf -> aclocal. The macros it
         # needs (progtest.m4 from gettext, pkg.m4 from pkgconf) ARE in
-        # /usr/share/aclocal (verified by the ls below). The failure is
-        # NOT a missing file: aclocal-1.18's compiled-in *system acdir*
-        # resolves to a DOUBLED path under the GitHub runner's
-        # D:\a\_temp\msys64 mount -- it searches
-        # `/a/_temp/msys64/usr/share/aclocal` (= the mount root prefixed
-        # onto itself), which does not exist, so `progtest.m4 does not
-        # exist` even though /usr/share/aclocal/progtest.m4 is right
-        # there. ACLOCAL_PATH only *appends* dirs; it cannot fix the
-        # broken built-in system dir aclocal scans first. The fix is to
-        # pin the system acdir to the clean msys path via $ACLOCAL,
-        # which autoreconf (and libass autogen.sh) honor. This is the
-        # actual root of the six-round Windows libass blocker.
+        # /usr/share/aclocal. The failure is NOT a missing file:
+        # aclocal-1.18 (msys perl) canonicalizes its acdir to the
+        # Windows path of the msys root and re-interprets it as a
+        # msys-absolute path, DOUBLING the mount prefix -- it looks for
+        # `/a/_temp/msys64/usr/share/aclocal/progtest.m4`, which under
+        # the runner mount (/ == D:\a\_temp\msys64) is
+        # D:\a\_temp\msys64\a\_temp\msys64\... and does not exist.
+        # --system-acdir doesn't help (same canonicalization mangles
+        # any dir we pass). The robust fix is to make the doubled path
+        # VALID: symlink the doubled msys root back to /. Then
+        # /a/_temp/msys64/<anything> resolves to /<anything>, fixing
+        # aclocal and any later autotools/libtool step that hits the
+        # same mount-doubling. Path derived from cygpath, not
+        # hardcoded, so a runner mount change can't silently break it.
+        WINROOT=$(cygpath -m /)                                  # D:/a/_temp/msys64
+        DBLROOT="/$(echo "$WINROOT" | sed -E 's#^[A-Za-z]:/##')" # /a/_temp/msys64
+        if [ "$DBLROOT" != "/" ] && [ ! -e "$DBLROOT" ]; then
+          mkdir -p "$(dirname "$DBLROOT")"
+          ln -sfn / "$DBLROOT"
+          echo "mount-doubling shim: $DBLROOT -> /"
+        fi
+        ls -1 "$DBLROOT/usr/share/aclocal/progtest.m4" || true
         export ACLOCAL="aclocal --system-acdir=/usr/share/aclocal"
         export ACLOCAL_PATH="/usr/share/aclocal:/mingw64/share/aclocal${ACLOCAL_PATH:+:$ACLOCAL_PATH}"
         ls -1 /usr/share/aclocal/progtest.m4 /usr/share/aclocal/pkg.m4 || true
