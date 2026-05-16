@@ -44,7 +44,9 @@ if IS_WINDOWS:
     # On Windows CI, we need to use the full path or setup the environment
     CC = "cl.exe"
     CXX = "cl.exe"
-    EXTRA_CFLAGS = ["/nologo", "/MD"]
+    # /MT: static VC++ CRT so cimgui_complete.dll carries no vcruntime140
+    # dependency (consumer machines need no VC++ redistributable).
+    EXTRA_CFLAGS = ["/nologo", "/MT"]
     if CI_MODE and SDL2_PREFIX:
         # Windows might have SDL2 headers directly in include/
         SDL_INCLUDE_DIRS = [f"{SDL2_PREFIX}/include", f"{SDL2_PREFIX}/include/SDL2"]

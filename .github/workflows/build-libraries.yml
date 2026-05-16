@@ -30,7 +30,7 @@ jobs:
       id: cache-keys
       run: |
         # Cache version - increment this to force cache rebuild
-        CACHE_VERSION="v1"
+        CACHE_VERSION="v2"  # bumped: static VC++ CRT (/MT) rebuild of all MSVC libs
 
         # Add manual cache clear suffix if requested
         if [ "${{ github.event.inputs.clear_cache }}" = "true" ]; then
@@ -456,7 +456,7 @@ jobs:
       shell: bash
       run: |
         # Cache version - increment this to force cache rebuild
-        CACHE_VERSION="v1"
+        CACHE_VERSION="v2"  # bumped: static VC++ CRT (/MT) rebuild of all MSVC libs
 
         # Add manual cache clear suffix if requested
         if [ "${{ github.event.inputs.clear_cache }}" = "true" ]; then
@@ -547,6 +547,8 @@ jobs:
         cmake ..\..\SDL2-2.32.4 ^
           -G "Visual Studio 17 2022" ^
           -A x64 ^
+          -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded ^
+          -DCMAKE_POLICY_DEFAULT_CMP0091=NEW ^
           -DCMAKE_BUILD_TYPE=Release ^
           -DCMAKE_INSTALL_PREFIX=%CD%\..\..\prebuilt\windows\x86_64 ^
           -DSDL_SHARED=ON ^
@@ -573,6 +575,8 @@ jobs:
         cmake ..\..\freetype-2.14.1 ^
           -G "Visual Studio 17 2022" ^
           -A x64 ^
+          -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded ^
+          -DCMAKE_POLICY_DEFAULT_CMP0091=NEW ^
           -DCMAKE_BUILD_TYPE=Release ^
           -DCMAKE_INSTALL_PREFIX=%CD%\..\..\prebuilt\windows\x86_64 ^
           -DBUILD_SHARED_LIBS=ON ^
@@ -646,6 +650,11 @@ jobs:
       shell: cmd
       run: |
         cd luajit\src
+        rem Static VC++ CRT: msvcbuild.bat hardcodes /MD (+/MDd). luajit is
+        rem a submodule (not editable in-repo), so patch it at build time so
+        rem lua51.dll carries no vcruntime140 dep. /MD->/MT also turns the
+        rem debug /MDd token into /MTd. Only lines 21-22 contain /MD.
+        powershell -Command "(Get-Content msvcbuild.bat) -replace '/MD','/MT' | Set-Content msvcbuild.bat"
         call msvcbuild.bat
         xcopy luajit.exe ..\..\prebuilt\windows\x86_64\bin\ /Y
         xcopy lua51.dll ..\..\prebuilt\windows\x86_64\bin\ /Y
@@ -928,7 +937,7 @@ jobs:
       id: cache-keys
       run: |
         # Cache version - increment this to force cache rebuild
-        CACHE_VERSION="v1"
+        CACHE_VERSION="v2"  # bumped: static VC++ CRT (/MT) rebuild of all MSVC libs
         
         # Add manual cache clear suffix if requested
         if [ "${{ github.event.inputs.clear_cache }}" = "true" ]; then

@@ -92,6 +92,8 @@ def build_zlib(build_dir, install_dir, platform_name):
         build_path.mkdir(exist_ok=True)
         run_command([
             "cmake", "..",
+            "-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded",
+            "-DCMAKE_POLICY_DEFAULT_CMP0091=NEW",  # static VC++ CRT (no vcruntime140 dep); no-op on non-MSVC
             f"-DCMAKE_INSTALL_PREFIX={install_dir}",
             "-DCMAKE_BUILD_TYPE=RelWithDebInfo"
         ], cwd=build_path)
@@ -166,6 +168,8 @@ def build_libpng(build_dir, install_dir, platform_name):
         build_path.mkdir(exist_ok=True)
         run_command([
             "cmake", "..",
+            "-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded",
+            "-DCMAKE_POLICY_DEFAULT_CMP0091=NEW",  # static VC++ CRT (no vcruntime140 dep); no-op on non-MSVC
             f"-DCMAKE_INSTALL_PREFIX={install_dir}",
             f"-DZLIB_ROOT={install_dir}",
             "-DPNG_SHARED=OFF",
@@ -219,6 +223,8 @@ def build_libjpeg(build_dir, install_dir, platform_name):
     
     cmake_args = [
         "cmake", "..",
+        "-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded",
+        "-DCMAKE_POLICY_DEFAULT_CMP0091=NEW",  # static VC++ CRT (no vcruntime140 dep); no-op on non-MSVC
         f"-DCMAKE_INSTALL_PREFIX={install_dir.resolve()}",
         "-DENABLE_SHARED=OFF",
         "-DENABLE_STATIC=ON",
@@ -254,6 +260,8 @@ def build_libwebp(build_dir, install_dir, platform_name):
     
     cmake_args = [
         "cmake", "..",
+        "-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded",
+        "-DCMAKE_POLICY_DEFAULT_CMP0091=NEW",  # static VC++ CRT (no vcruntime140 dep); no-op on non-MSVC
         f"-DCMAKE_INSTALL_PREFIX={install_dir.resolve()}",
         "-DBUILD_SHARED_LIBS=OFF",
         "-DWEBP_BUILD_ANIM_UTILS=OFF",
@@ -310,6 +318,8 @@ def build_sdl_image(build_dir, install_dir, platform_name):
     
     cmake_args = [
         "cmake", "..",
+        "-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded",
+        "-DCMAKE_POLICY_DEFAULT_CMP0091=NEW",  # static VC++ CRT (no vcruntime140 dep); no-op on non-MSVC
         f"-DCMAKE_INSTALL_PREFIX={install_dir.resolve()}",
         f"-DCMAKE_PREFIX_PATH={install_dir.resolve()};{sdl2_dir.resolve()}",
         f"-DSDL2_DIR={sdl2_dir.resolve()}/lib/cmake/SDL2",

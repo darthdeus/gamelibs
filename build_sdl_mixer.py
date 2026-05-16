@@ -94,6 +94,8 @@ def build_libogg(build_dir, install_dir, platform_name):
     
     cmake_args = [
         "cmake", "..",
+        "-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded",
+        "-DCMAKE_POLICY_DEFAULT_CMP0091=NEW",  # static VC++ CRT (no vcruntime140 dep); no-op on non-MSVC
         f"-DCMAKE_INSTALL_PREFIX={install_dir}",
         "-DBUILD_SHARED_LIBS=OFF",
         "-DCMAKE_BUILD_TYPE=Release",
@@ -129,6 +131,8 @@ def build_libvorbis(build_dir, install_dir, platform_name):
     
     cmake_args = [
         "cmake", "..",
+        "-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded",
+        "-DCMAKE_POLICY_DEFAULT_CMP0091=NEW",  # static VC++ CRT (no vcruntime140 dep); no-op on non-MSVC
         f"-DCMAKE_INSTALL_PREFIX={install_dir}",
         f"-DOGG_ROOT={install_dir}",
         "-DBUILD_SHARED_LIBS=OFF",
@@ -165,6 +169,8 @@ def build_flac(build_dir, install_dir, platform_name):
     
     cmake_args = [
         "cmake", "..",
+        "-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded",
+        "-DCMAKE_POLICY_DEFAULT_CMP0091=NEW",  # static VC++ CRT (no vcruntime140 dep); no-op on non-MSVC
         f"-DCMAKE_INSTALL_PREFIX={install_dir}",
         f"-DOGG_ROOT={install_dir}",
         "-DBUILD_SHARED_LIBS=OFF",
@@ -213,6 +219,8 @@ def build_mpg123(build_dir, install_dir, platform_name):
             
             cmake_args = [
                 "cmake", "..",
+                "-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded",
+                "-DCMAKE_POLICY_DEFAULT_CMP0091=NEW",  # static VC++ CRT (no vcruntime140 dep); no-op on non-MSVC
                 f"-DCMAKE_INSTALL_PREFIX={install_dir}",
                 "-DBUILD_SHARED_LIBS=OFF",
                 "-DCMAKE_BUILD_TYPE=RelWithDebInfo",
@@ -281,6 +289,8 @@ def build_sdl_mixer(build_dir, install_dir, platform_name):
     
     cmake_args = [
         "cmake", "..",
+        "-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded",
+        "-DCMAKE_POLICY_DEFAULT_CMP0091=NEW",  # static VC++ CRT (no vcruntime140 dep); no-op on non-MSVC
         f"-DCMAKE_INSTALL_PREFIX={install_dir}",
         f"-DCMAKE_PREFIX_PATH={install_dir};{sdl2_dir.resolve()}",
         f"-DSDL2_DIR={sdl2_dir.resolve()}/lib/cmake/SDL2",
