@@ -804,6 +804,18 @@ jobs:
         # hits an unfixable msys2 path-canonicalization bug (six prior
         # shim rounds). Meson never invokes aclocal, removing the whole
         # failure class. No aclocal/autotools env shims needed anymore.
+        #
+        # Clear the inherited PKG_CONFIG_PATH. actions/setup-python sets
+        # it to C:\hostedtoolcache\...\lib/pkgconfig (a Windows path
+        # with a drive colon). mpv-build's *-config scripts APPEND
+        # $BUILD/build_libs/lib/pkgconfig to it with a POSIX ':'
+        # separator; the inherited 'C:' colon then makes the list
+        # unparseable to pkgconf, so mpv can't find the libav*.pc that
+        # ffmpeg installed into build_libs -> "Dependency libavcodec
+        # not found". Empty -> mpv-build's scripts use just the clean
+        # msys build_libs path; mingw deps come from pkgconf's built-in
+        # /mingw64 dir regardless.
+        unset PKG_CONFIG_PATH
         python build_mpv.py
         echo "libmpv+FFmpeg built (pinned, version-consistent, mingw)"
 
