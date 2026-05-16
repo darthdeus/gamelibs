@@ -39,11 +39,19 @@ MPV_BUILD_COMMIT = "9443097290e82008f26f1597590926c63e7ae053"
 # the pair whose skew caused the original fm crash -- pin both hard.
 FFMPEG_TAG = "n7.1.1"
 MPV_TAG = "v0.40.0"
-# libplacebo is statically linked INTO libmpv (no ABI skew possible
-# across the process boundary), so "release" (latest upstream release
-# tag, not master) is reproducible enough and avoids pinning one too
-# old for mpv 0.40. (libass is disabled entirely -- see
-# clone_mpv_build() for the rationale.)
+# libass / libplacebo are statically linked INTO libmpv (no ABI skew
+# possible across the process boundary), so "release" (latest upstream
+# release tag, not master) is reproducible enough and avoids pinning a
+# libplacebo too old for mpv 0.40. Revisit only if a build breaks.
+#
+# libass is NOT optional: mpv 0.40's meson.build does an unconditional
+# `dependency('libass')` (there is no -Dlibass meson option -- passing
+# one yields "Unknown option"), and patching mpv-build to skip building
+# libass just makes that dependency unresolvable. Shipping a *system*
+# libass would re-introduce an un-vendored runtime dep, defeating the
+# whole point. So mpv-build builds libass static and links it into
+# libmpv -- self-contained, exactly as on the Phase-2 mac/linux build.
+LIBASS_REF = "release"
 LIBPLACEBO_REF = "release"
 
 ROOT = Path(__file__).resolve().parent
@@ -70,6 +78,18 @@ def run(cmd, cwd=None, env=None):
     subprocess.run(cmd, cwd=cwd, env=env, check=True)
 
 
+def write_lf(path: Path, text: str):
+    """Write with hard LF endings. On Windows this script runs under
+    mingw-python, where Path.write_text() (newline=None) translates \\n
+    -> \\r\\n. mpv-build's *-config scripts split *_options with
+    IFS=<newline> (LF only), so a CRLF file leaves a trailing \\r on
+    every token: `-Dlibmpv=true\\r` -> meson "Option libmpv value
+    true"; `--disable-static\\r` -> ffmpeg eval junk. config/branch-*
+    and any patched POSIX script are equally CRLF-poisoned. Force LF
+    for every generated file, every platform."""
+    path.write_text(text, newline="\n")
+
+
 def clone_mpv_build(work: Path) -> Path:
     mb = work / "mpv-build"
     if not mb.exists():
@@ -84,31 +104,10 @@ def clone_mpv_build(work: Path) -> Path:
     # (the gap recorded in BUILD_MPV.md).
     cfg = mb / "config"
     cfg.mkdir(exist_ok=True)
-    (cfg / "branch-ffmpeg").write_text(f"@{FFMPEG_TAG}\n")
-    (cfg / "branch-mpv").write_text(f"@{MPV_TAG}\n")
-    (cfg / "branch-libplacebo").write_text(f"{LIBPLACEBO_REF}\n")
-
-    # Drop libass entirely. It is SSA/ASS subtitle rendering -- unused
-    # by every consumer (fm audio preview, anvil video preview, the
-    # recorder/export which goes through ffmpeg-the-third). It is also
-    # the single most fragile link in the chain: its autotools/gettext
-    # autoreconf hit an MSYS2<->MINGW path-mangling bug that ate six CI
-    # rounds on Windows ("aclocal: progtest.m4 does not exist" while the
-    # file demonstrably exists, because a mingw tool hands aclocal a
-    # Windows-rooted path that is not a valid MSYS mount). Carrying a
-    # flaky dep for a feature we don't use is exactly what this repo
-    # avoids -- so mpv builds with `libass=disabled` and mpv-build's
-    # unconditional libass step is patched out of its `build` script
-    # (it has no skip flag). Uniform on all platforms: smaller libmpv,
-    # one fewer dep, no behaviour change for our use cases.
-    build_script = mb / "build"
-    txt = build_script.read_text()
-    patched = "\n".join(
-        ("# [build_mpv.py] libass disabled: " + ln) if "libass" in ln else ln
-        for ln in txt.splitlines()
-    ) + "\n"
-    if patched != txt:
-        build_script.write_text(patched)
+    write_lf(cfg / "branch-ffmpeg", f"@{FFMPEG_TAG}\n")
+    write_lf(cfg / "branch-mpv", f"@{MPV_TAG}\n")
+    write_lf(cfg / "branch-libass", f"{LIBASS_REF}\n")
+    write_lf(cfg / "branch-libplacebo", f"{LIBPLACEBO_REF}\n")
     return mb
 
 
@@ -122,35 +121,35 @@ def write_options(mb: Path):
     # --enable-avdevice (NOT --enable-libavdevice, which aborts
     # configure); keep it explicit so a future default change can't
     # silently drop the Anvil recorder's screen-capture inputs.
-    # SPACE-separated, single line -- NOT newline-joined. mpv-build
-    # appends this file's contents into its ffmpeg configure invocation;
-    # on unix newlines word-split fine, but under MSYS2 sh they survive
-    # into argv ("Unknown option '--disable-programs\n'"). One line is
-    # robust everywhere.
-    (mb / "ffmpeg_options").write_text(
-        " ".join([
-            "--enable-shared",
-            "--disable-static",
-            "--enable-avdevice",
-            "--disable-doc",
-            "--disable-programs",
-            "--disable-debug",
-            "--enable-pic",
-        ]) + "\n"
-    )
+    # ONE OPTION PER LINE -- newline-joined, NOT space-joined. mpv-build's
+    # scripts/ffmpeg-config reads this file as `IFS=<newline>; set --
+    # $(cat ffmpeg_options) "$@"` -- it word-splits on NEWLINE ONLY, not
+    # spaces. A single space-joined line therefore arrives as ONE giant
+    # argv string and ffmpeg's configure chokes (`eval: __disable_static:
+    # not found`). Phase 2 (green on mac+linux) used newline-joined; the
+    # later single-line "MSYS2 robustness" change was a misdiagnosis --
+    # the real Windows breakage was CRLF (see write_lf), fixed there. LF
+    # endings via write_lf make newline-joined correct on every platform.
+    write_lf(mb / "ffmpeg_options", "\n".join([
+        "--enable-shared",
+        "--disable-static",
+        "--enable-avdevice",
+        "--disable-doc",
+        "--disable-programs",
+        "--disable-debug",
+        "--enable-pic",
+    ]) + "\n")
     # mpv: build libmpv as a shared library; no CLI player needed.
-    (mb / "mpv_options").write_text(
-        "\n".join([
-            "-Dlibmpv=true",
-            "-Dcplayer=false",
-            "-Ddefault_library=shared",
-        ]) + "\n"
-    )
-    # NB: do NOT pass -Dlibass=disabled. mpv's libass is a meson
-    # `feature` defaulting to auto -- meson rejects it as "Unknown
-    # option" on some versions, and it is unneeded: clone_mpv_build()
-    # patches mpv-build to never build libass, so the dependency is
-    # absent and mpv's auto-detection disables it on its own.
+    # scripts/mpv-config splits this the same IFS=<newline> way.
+    write_lf(mb / "mpv_options", "\n".join([
+        "-Dlibmpv=true",
+        "-Dcplayer=false",
+        "-Ddefault_library=shared",
+    ]) + "\n")
+    # NB: do NOT add -Dlibass=disabled. mpv 0.40 has no `libass` meson
+    # option (meson rejects it: "Unknown option"); libass is a hard
+    # `dependency()` satisfied by mpv-build's own static libass build
+    # (config/branch-libass). See clone_mpv_build() / LIBASS_REF.
 
 
 def stage(mb: Path, prefix: Path):

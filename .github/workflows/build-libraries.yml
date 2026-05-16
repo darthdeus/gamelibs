@@ -921,6 +921,14 @@ jobs:
         SOLOUD_SCRIPT_HASH=$(shasum -a 256 build_soloud.py 2>/dev/null | cut -d' ' -f1)
         echo "soloud-hash=${CACHE_VERSION}-${SOLOUD_HASH}-${SOLOUD_SCRIPT_HASH}${CACHE_SUFFIX}" >> $GITHUB_OUTPUT
 
+        # libmpv+FFmpeg: hash build_mpv.py (embeds the pinned refs).
+        # This line was missing from the macOS job, so mpv-hash was
+        # empty -> key collapsed to the constant "mpv-macos-arm64-" and
+        # macOS restored a stale pre-regression libmpv on every run,
+        # masking real build status. git hash-object is portable.
+        MPV_HASH=$(git hash-object build_mpv.py)
+        echo "mpv-hash=${CACHE_VERSION}-${MPV_HASH}${CACHE_SUFFIX}" >> $GITHUB_OUTPUT
+
     - name: Setup build environment
       run: |
         brew install cmake ninja pkg-config meson nasm \
