@@ -763,6 +763,18 @@ jobs:
       with:
         msystem: MINGW64
         update: true
+        # Install to D:\msys64 instead of the default RUNNER_TEMP
+        # (D:\a\_temp\msys64). Reason: libass autoreconf -> aclocal
+        # canonicalizes its acdir into the Windows path then naively
+        # strips the drive letter (a msys-perl/runtime bug, not mount-
+        # aware). With the default root the result is `/a/_temp/...`
+        # and `/a` is cygwin's automount for the nonexistent drive A:
+        # -- unshimmable (single-letter /X is reserved for drives).
+        # With root D:\msys64 the stripped path is `/msys64/...`, a
+        # normal multi-char path we CAN remap with a symlink to /
+        # (done in the build step). D: has the build space; C: does
+        # not. Keeps the build_mpv.py path identical to mac/linux.
+        location: D:\
         # mpv-build compiles ffmpeg + libass + libplacebo + mpv from
         # our pinned sources; these are its toolchain + the libass/
         # libplacebo dependencies (same role as the ubuntu apt /
@@ -799,34 +811,27 @@ jobs:
       run: |
         # libass's autogen.sh runs autoreconf -> aclocal. progtest.m4
         # (gettext) and pkg.m4 (pkgconf) ARE in /usr/share/aclocal --
-        # the failure is NOT a missing file, and NOT an automake
-        # version regression (aclocal-1.16 reproduced it identically).
-        # The msys2 runtime, when aclocal canonicalizes its acdir via
-        # perl realpath, returns the Windows path of the dir then drops
-        # the drive letter: /usr/share/aclocal (= D:\a\_temp\msys64\
-        # usr\share\aclocal, since / is mounted at D:\a\_temp\msys64 on
-        # the runner) becomes `/a/_temp/msys64/usr/share/aclocal`. MSYS2
-        # automounts drives, so a leading single-letter `/a/...` is read
-        # as the nonexistent drive A: -> "file does not exist". It is
-        # unshimmable as a path (you cannot mkdir /a; it IS drive A:),
-        # and --system-acdir / a different automake version don't help
-        # (same runtime canonicalization). The robust fix: add an
-        # /etc/fstab entry mapping that exact mangled mountpoint back to
-        # the real Windows root. fstab is re-read by every new msys
-        # process, including the `sh ./rebuild` child build_mpv.py
-        # spawns, so aclocal's lookup then resolves to the real dir.
+        # the failure is NOT a missing file, NOT an automake version
+        # regression (aclocal-1.16 reproduced it identically), and NOT
+        # fixable via fstab (cygwin's drive automount shadows it). The
+        # msys2 runtime, when aclocal canonicalizes its acdir, returns
+        # the Windows path then NAIVELY strips the drive letter (not
+        # mount-aware). With MSYS2 relocated to D:\msys64 (see Setup
+        # MSYS2 step) that yields `/msys64/usr/share/aclocal` -- a
+        # normal multi-char path (NOT the old `/a/...`, which collided
+        # with the reserved single-letter drive automount and was
+        # unshimmable). Now one symlink fixes it: /msys64 -> / (the
+        # msys root). aclocal's `/msys64/usr/share/aclocal/progtest.m4`
+        # then resolves to the real /usr/share/aclocal. The symlink is
+        # on disk in the msys root, so every child process (the `sh
+        # ./rebuild` build_mpv.py spawns, autoreconf, aclocal) sees it.
         # Path derived via cygpath, not hardcoded.
-        # cygpath -m / yields a TRAILING SLASH (D:/a/_temp/msys64/);
-        # an fstab mountpoint with a trailing slash is silently ignored
-        # by cygwin -- strip it (and any) off both sides.
-        WINROOT=$(cygpath -m / | sed 's#/*$##')                  # D:/a/_temp/msys64
-        STRIP="/$(echo "$WINROOT" | sed -E 's#^[A-Za-z]:/##')"   # /a/_temp/msys64
-        if [ "$STRIP" != "/" ] && ! grep -qF " $STRIP " /etc/fstab 2>/dev/null; then
-          echo "$WINROOT $STRIP ntfs binary,posix=0,noacl 0 0" >> /etc/fstab
-          echo "fstab shim: $STRIP -> $WINROOT"
+        WINROOT=$(cygpath -m / | sed 's#/*$##')                  # D:/msys64
+        STRIP="/$(echo "$WINROOT" | sed -E 's#^[A-Za-z]:/##')"   # /msys64
+        if [ "$STRIP" != "/" ] && [ ! -e "$STRIP" ]; then
+          ln -sfn / "$STRIP"
+          echo "drive-strip shim: $STRIP -> /"
         fi
-        # New msys process picks up the fstab entry; verify the once-
-        # mangled path now resolves before the long build.
         bash -c "ls -1 '$STRIP/usr/share/aclocal/progtest.m4'" || true
         export ACLOCAL_PATH="/usr/share/aclocal:/mingw64/share/aclocal${ACLOCAL_PATH:+:$ACLOCAL_PATH}"
         ls -1 /usr/share/aclocal/progtest.m4 /usr/share/aclocal/pkg.m4 || true
