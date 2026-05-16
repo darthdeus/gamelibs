@@ -277,6 +277,13 @@ release-minor` again (→ v0.6.1).
 
 ### Phase 4 — Release + consumer cutover
 
+> **Blocked on three consumer-found bugs — see
+> `CONSUMER_CUTOVER_FIXES.md`** (relocatable `.pc`, libmpv hard-links
+> Homebrew dylibs, cache-hit ships incomplete macOS bundle). Fix those
+> before releasing; the rock-sfx side is proven working in parallel
+> only via local workarounds for the `.pc` bug.
+
+- [ ] Fix the three bugs in `CONSUMER_CUTOVER_FIXES.md`.
 - [ ] `make release-minor` (new lib = minor bump), push tag, CI
       publishes per-platform zips.
 - [ ] rock-sfx: `make download` refresh; delete the
