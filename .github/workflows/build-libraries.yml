@@ -816,7 +816,10 @@ jobs:
         # process, including the `sh ./rebuild` child build_mpv.py
         # spawns, so aclocal's lookup then resolves to the real dir.
         # Path derived via cygpath, not hardcoded.
-        WINROOT=$(cygpath -m /)                                  # D:/a/_temp/msys64
+        # cygpath -m / yields a TRAILING SLASH (D:/a/_temp/msys64/);
+        # an fstab mountpoint with a trailing slash is silently ignored
+        # by cygwin -- strip it (and any) off both sides.
+        WINROOT=$(cygpath -m / | sed 's#/*$##')                  # D:/a/_temp/msys64
         STRIP="/$(echo "$WINROOT" | sed -E 's#^[A-Za-z]:/##')"   # /a/_temp/msys64
         if [ "$STRIP" != "/" ] && ! grep -qF " $STRIP " /etc/fstab 2>/dev/null; then
           echo "$WINROOT $STRIP ntfs binary,posix=0,noacl 0 0" >> /etc/fstab
