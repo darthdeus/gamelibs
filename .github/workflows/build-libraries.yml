@@ -797,32 +797,28 @@ jobs:
       if: steps.cache-mpv.outputs.cache-hit != 'true'
       shell: msys2 {0}
       run: |
-        # libass's autogen.sh runs autoreconf -> aclocal. The macros it
-        # needs (progtest.m4 from gettext, pkg.m4 from pkgconf) ARE in
-        # /usr/share/aclocal. The failure is NOT a missing file:
-        # aclocal-1.18 (msys perl) canonicalizes its acdir to the
-        # Windows path of the msys root and re-interprets it as a
-        # msys-absolute path, DOUBLING the mount prefix -- it looks for
-        # `/a/_temp/msys64/usr/share/aclocal/progtest.m4`, which under
-        # the runner mount (/ == D:\a\_temp\msys64) is
-        # D:\a\_temp\msys64\a\_temp\msys64\... and does not exist.
-        # --system-acdir doesn't help (same canonicalization mangles
-        # any dir we pass). The robust fix is to make the doubled path
-        # VALID: symlink the doubled msys root back to /. Then
-        # /a/_temp/msys64/<anything> resolves to /<anything>, fixing
-        # aclocal and any later autotools/libtool step that hits the
-        # same mount-doubling. Path derived from cygpath, not
-        # hardcoded, so a runner mount change can't silently break it.
-        WINROOT=$(cygpath -m /)                                  # D:/a/_temp/msys64
-        DBLROOT="/$(echo "$WINROOT" | sed -E 's#^[A-Za-z]:/##')" # /a/_temp/msys64
-        if [ "$DBLROOT" != "/" ] && [ ! -e "$DBLROOT" ]; then
-          mkdir -p "$(dirname "$DBLROOT")"
-          ln -sfn / "$DBLROOT"
-          echo "mount-doubling shim: $DBLROOT -> /"
-        fi
-        ls -1 "$DBLROOT/usr/share/aclocal/progtest.m4" || true
-        export ACLOCAL="aclocal --system-acdir=/usr/share/aclocal"
+        # libass's autogen.sh runs autoreconf -> aclocal. progtest.m4
+        # (gettext) and pkg.m4 (pkgconf) ARE in /usr/share/aclocal --
+        # the failure is NOT a missing file. It is an automake-1.18
+        # regression under msys-perl: aclocal canonicalizes its system
+        # acdir through a realpath that yields a Windows path, then
+        # drops the drive letter, so `/usr/share/aclocal` is searched
+        # as `/a/_temp/msys64/usr/share/aclocal` -- and MSYS2 automounts
+        # drives, so a leading `/a/...` resolves to the nonexistent
+        # drive A:, hence "file ... does not exist". --system-acdir
+        # doesn't help (same canonicalization mangles whatever we pass),
+        # and the doubled path can't be shimmed (you cannot mkdir /a;
+        # it IS drive A:). The fix is to sidestep the regressed tool:
+        # pin aclocal/automake to the long-stable 1.16 (shipped by the
+        # MSYS2 automake1.16 package, in the install list). 1.16
+        # predates the realpath change and resolves /usr/share/aclocal
+        # correctly. autoreconf + libass autogen.sh honor $ACLOCAL /
+        # $AUTOMAKE. This is the actual root of the Windows libass
+        # blocker (six prior rounds chased the symptom, not 1.18).
+        export ACLOCAL="aclocal-1.16 --system-acdir=/usr/share/aclocal"
+        export AUTOMAKE="automake-1.16"
         export ACLOCAL_PATH="/usr/share/aclocal:/mingw64/share/aclocal${ACLOCAL_PATH:+:$ACLOCAL_PATH}"
+        aclocal-1.16 --version | head -1
         ls -1 /usr/share/aclocal/progtest.m4 /usr/share/aclocal/pkg.m4 || true
         # Same self-built, version-consistent libmpv+shared-FFmpeg as
         # mac/linux -- just under the MSYS2 MINGW64 toolchain. No
