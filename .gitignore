@@ -9,3 +9,6 @@ prebuilt/
 imgui.ini
 screenshot.png
 screenshot.bmp
+
+# cimgui-love generator scratch
+cimgui_love_generator/out/

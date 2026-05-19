@@ -1,6 +1,10 @@
--- Dear Imgui version: 1.88
--- Lua FFI bindings for cimgui (Dear ImGui C wrapper)
--- These bindings are based on cimgui-love, modified for Stone/Rock
+-- cimgui Lua FFI bindings (gamelibs build)
+--
+-- Generated from the cimgui submodule pinned in this repo and the cimgui-love
+-- generator vendored under cimgui_love_generator/. The dynamic library shipped
+-- alongside (libcimgui_complete.{so,dylib,dll}) is built from the same cimgui
+-- SHA, so cdef + dylib are guaranteed to be in lockstep. See
+-- cimgui_love_generator/README.md for regeneration instructions.
 
 local path = (...):gsub(".init$", "") .. "."
 
@@ -9,7 +13,6 @@ require(path .. "cdef")
 local M = require(path .. "master")
 local ffi = require("ffi")
 
--- Determine library name based on OS
 local lib_name
 if ffi.os == "Linux" then
     lib_name = "libcimgui_complete.so"
@@ -21,25 +24,20 @@ else
     error("Unsupported platform: " .. ffi.os)
 end
 
--- Try to load the library - relies on LD_LIBRARY_PATH/DYLD_LIBRARY_PATH being set
--- by the rock runtime (which includes prebuilt/gamelibs-*/lib)
 local ok, lib = pcall(ffi.load, lib_name)
 if not ok then
-    -- Fallback: try loading by name only (without extension)
     ok, lib = pcall(ffi.load, "cimgui_complete")
 end
 if not ok then
     error("Failed to load cimgui library: " .. tostring(lib) ..
-          "\nMake sure LD_LIBRARY_PATH includes the prebuilt gamelibs lib directory")
+          "\nEnsure the runtime library search path includes the gamelibs lib directory")
 end
 
 M.C = lib
 
 require(path .. "enums")
 require(path .. "wrap")
-require(path .. "shortcuts")
 
--- remove access to M._common
 M._common = nil
 
 return M

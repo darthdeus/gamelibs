@@ -8,6 +8,7 @@ this repo serves a single purpose, precompile commonly used game libraries, with
 - **FreeType** - Font rendering library
 - **cimgui** - C wrapper for Dear ImGui with SDL2/OpenGL3 backends
 - **LuaJIT** - Just-In-Time Lua compiler
+- **libmpv + FFmpeg** - Media playback (libmpv) + screen capture (libavdevice); self-contained, version-consistent vendored build (mpv v0.40.0 + FFmpeg n7.1.1). See `BUILD_MPV.md`.
 
 ## TODO
 

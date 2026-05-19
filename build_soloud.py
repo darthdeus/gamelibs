@@ -211,6 +211,8 @@ def build_soloud(build_dir, install_dir, platform_name):
 
     cmake_args = [
         "cmake", "..",
+        "-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded",
+        "-DCMAKE_POLICY_DEFAULT_CMP0091=NEW",  # static VC++ CRT (no vcruntime140 dep); no-op on non-MSVC
         f"-DCMAKE_INSTALL_PREFIX={install_dir}",
         "-DCMAKE_BUILD_TYPE=Release",
     ]
