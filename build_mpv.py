@@ -53,6 +53,20 @@ MPV_TAG = "v0.40.0"
 # libmpv -- self-contained, exactly as on the Phase-2 mac/linux build.
 LIBASS_REF = "release"
 LIBPLACEBO_REF = "release"
+# libx264: the H.264 software encoder. mpv-build does NOT manage x264
+# (it only tracks ffmpeg/mpv/libass/libplacebo/fribidi), so unlike the
+# refs above we build it ourselves, static, into mpv-build's build_libs
+# prefix BEFORE ffmpeg configures -- scripts/ffmpeg-config prepends
+# build_libs/lib/pkgconfig to PKG_CONFIG_PATH, so a static x264 with its
+# .pc there makes `--enable-libx264` resolve and links libx264 into the
+# shipped (shared) libavcodec. Without this, the only H264 encoder in
+# the bundle is h264_v4l2m2m (a V4L2 hw wrapper, no device on CI / most
+# desktops) -- recorder + export are dead on Linux. --enable-gpl is
+# already in mpv-build's ffmpeg defaults so libx264 is license-OK.
+# Pinned to x264's `stable` branch tip (release-quality), same
+# pin-don't-float discipline as FFMPEG_TAG/MPV_TAG.
+X264_REPO = "https://code.videolan.org/videolan/x264.git"
+X264_REF = "b35605ace3ddf7c1a5d67a2eb553f034aef41d55"
 
 ROOT = Path(__file__).resolve().parent
 
@@ -178,6 +192,49 @@ def build_libass_meson(mb: Path):
     print(f"  libass (meson, static) -> {prefix}", flush=True)
 
 
+def build_x264(mb: Path):
+    """Build libx264 static into mpv-build's build_libs prefix.
+
+    All platforms. mpv-build does not manage x264, so we clone + build
+    it ourselves at the pinned SHA. scripts/ffmpeg-config prepends
+    build_libs/lib/pkgconfig to PKG_CONFIG_PATH before running ffmpeg's
+    configure, so a static x264 installed here makes `--enable-libx264`
+    resolve and links libx264 into the (shared) libavcodec we ship.
+
+    Ordering is load-bearing: ./clean does `rm -rf build_libs`, so this
+    must run AFTER ./update + ./clean and BEFORE ./build (which is what
+    invokes ffmpeg-config). x264's asm needs nasm (>= 2.13) on PATH;
+    x264's configure HARD-ERRORS without it ("Found no assembler") --
+    it does not silently drop asm. That loud failure is correct: nasm
+    is already in every CI runner's dep set (ffmpeg needs it too), so a
+    missing assembler means the environment is broken, not that a
+    slower encoder is acceptable. We never pass --disable-asm."""
+    src = mb / "x264"
+    if not src.exists():
+        run(["git", "clone", X264_REPO, str(src)])
+    run(["git", "fetch", "--all"], cwd=src)
+    run(["git", "checkout", X264_REF], cwd=src)
+    prefix = mb / "build_libs"
+    # Under MSYS2 the POSIX configure script must be launched via `sh`
+    # (CreateProcess won't honor the shebang); unix runs it directly.
+    sh_prefix = ["sh"] if get_platform() == "windows" else []
+    run(sh_prefix + ["./configure",
+         f"--prefix={prefix.as_posix()}",
+         "--enable-static",
+         "--enable-pic",
+         "--disable-cli",
+         "--disable-opencl"], cwd=src)
+    jobs = str(os.cpu_count() or 4)
+    run(["make", "-j" + jobs], cwd=src)
+    run(["make", "install"], cwd=src)
+    pc = prefix / "lib" / "pkgconfig" / "x264.pc"
+    if not pc.exists():
+        raise SystemExit(
+            f"x264.pc not installed at {pc} after make install -- "
+            "ffmpeg's --enable-libx264 would not resolve.")
+    print(f"  x264 (static) -> {prefix}", flush=True)
+
+
 def write_options(mb: Path):
     # mpv-build APPENDS this file to its own ffmpeg defaults
     # (--enable-static --disable-shared --enable-gpl --enable-gnutls ...);
@@ -201,6 +258,12 @@ def write_options(mb: Path):
         "--enable-shared",
         "--disable-static",
         "--enable-avdevice",
+        # H264 software encoder. mpv-build's ffmpeg defaults already
+        # carry --enable-gpl (verified in the shipped configure string),
+        # so libx264 is license-OK. Resolves against the static x264
+        # build_x264() installs into build_libs before ./build. Without
+        # this the bundle's only H264 encoder is h264_v4l2m2m.
+        "--enable-libx264",
         "--disable-doc",
         "--disable-programs",
         "--disable-debug",
@@ -303,6 +366,14 @@ def stage(mb: Path, prefix: Path):
     src_pc = src_lib / "pkgconfig"
     if src_pc.is_dir():
         for pc in src_pc.glob("*.pc"):
+            # x264 is a build-time-only dep: static libx264.a is linked
+            # INTO the shared libavcodec we ship; libx264.a itself is
+            # not staged (only .so/.dylib are). Shipping x264.pc would
+            # advertise a -lx264 that resolves to nothing in the bundle
+            # and could break a consumer's pkg-config --static walk of
+            # libavcodec. Drop it -- nothing external links x264.
+            if pc.name == "x264.pc":
+                continue
             shutil.copy2(pc, lib / "pkgconfig" / pc.name)
     for sub in src_inc.iterdir():
         if sub.is_dir():
@@ -649,21 +720,30 @@ def main():
     # shebang honoring) so scripts must be launched through `sh`. On
     # unix the shebang works directly.
     #
-    # unix: ./rebuild = update -> build (ffmpeg + libass autotools +
-    # libplacebo + mpv), proven green on mac/linux.
+    # unix: ./rebuild = ./update -> ./clean -> ./build. We run the
+    # phases explicitly instead so x264 can be installed into build_libs
+    # in the gap: ./clean does `rm -rf build_libs`, so x264 must land
+    # after it and before ./build (which runs ffmpeg-config). This is
+    # the same phase-split Windows already needs for meson libass; the
+    # net ffmpeg+libass+libplacebo+mpv build is unchanged from ./rebuild.
     #
     # windows: split the phases. ./update clones all sources at the
     # pinned refs; then build libass with Meson (autotools/aclocal is
     # broken under msys2 -- see patch_out_mpv_build_libass) and comment
-    # mpv-build's own libass steps; then ./build compiles ffmpeg +
-    # libplacebo + mpv, which find the meson libass via pkg-config.
+    # mpv-build's own libass steps; build x264 static; then ./build
+    # compiles ffmpeg + libplacebo + mpv, which find the meson libass
+    # and the static x264 via pkg-config.
     if plat == "windows":
         run(["sh", "./update"], cwd=mb)
         patch_out_mpv_build_libass(mb)
         build_libass_meson(mb)
+        build_x264(mb)
         run(["sh", "./build", "-j" + jobs], cwd=mb)
     else:
-        run(["./rebuild", "-j" + jobs], cwd=mb)
+        run(["./update"], cwd=mb)
+        run(["./clean"], cwd=mb)
+        build_x264(mb)
+        run(["./build", "-j" + jobs], cwd=mb)
     stage(mb, prefix)
 
     print("\n=== staged ===", flush=True)
