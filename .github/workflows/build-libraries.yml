@@ -440,7 +440,11 @@ jobs:
         retention-days: 7
 
   build-windows:
-    runs-on: windows-latest
+    # Pin to windows-2022: the SDL2/FreeType CMake steps use the
+    # "Visual Studio 17 2022" generator, which windows-latest (now
+    # windows-2025) no longer satisfies -- vswhere finds no VS 2022
+    # instance and configure fails. The cache masked this until eviction.
+    runs-on: windows-2022
     name: Build Windows x86_64
 
     steps:
