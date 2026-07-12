@@ -110,12 +110,23 @@ else:  # Linux
             EXTRA_LDFLAGS = [
                 "-Wl,--whole-archive", f"{SDL_LIB_DIR}/libSDL2.a", "-Wl,--no-whole-archive",
                 "-lGL", "-ldl", "-lm", "-lpthread",
+                # Bake the C++ runtime into the .so so consumers never need the
+                # player's system libstdc++.so.6/libgcc_s.so.1. Safe because
+                # cimgui's API surface is pure C -- no C++ types or exceptions
+                # cross the .so boundary.
+                "-static-libstdc++", "-static-libgcc",
             ]
         else:
             # Use $ORIGIN to find SDL2 in same directory as cimgui
-            EXTRA_LDFLAGS = [f"-L{SDL_LIB_DIR}", "-lSDL2", "-lGL", "-ldl", "-lm", "-Wl,-rpath,'$ORIGIN'"]
+            EXTRA_LDFLAGS = [f"-L{SDL_LIB_DIR}", "-lSDL2", "-lGL", "-ldl", "-lm", "-Wl,-rpath,'$ORIGIN'",
+                             # Bake in the C++ runtime (see note above); cimgui's
+                             # API is pure C so this is the textbook-safe case.
+                             "-static-libstdc++", "-static-libgcc"]
     else:
-        EXTRA_LDFLAGS = ["-L../bindings", "-lSDL2-2.0", "-lGL", "-ldl", "-Wl,-rpath,$ORIGIN/../bindings"]
+        EXTRA_LDFLAGS = ["-L../bindings", "-lSDL2-2.0", "-lGL", "-ldl", "-Wl,-rpath,$ORIGIN/../bindings",
+                         # Bake in the C++ runtime (see note above); cimgui's API
+                         # is pure C so this is the textbook-safe case.
+                         "-static-libstdc++", "-static-libgcc"]
         SDL_INCLUDE_DIRS = ["bindings/SDL2-2.32.4/include"]
 
 # Simple text output - no colors to avoid encoding issues
