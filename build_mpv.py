@@ -499,8 +499,9 @@ def fix_macos_install_names(lib: Path):
        to `@rpath/<name>`, then itself scanned (harfbuzz->graphite2/glib,
        fontconfig->expat/png/freetype, glib->pcre2/intl, ...).
 
-    Mirrors how build_sdl_image stages its deps, extended with the
-    transitive walk libmpv's richer dep graph needs."""
+    Stages deps into the prefix and rewrites their install names to
+    @rpath, extended with the transitive walk libmpv's richer dep graph
+    needs."""
     def is_external(p: str) -> bool:
         return p.startswith("/opt/homebrew") or p.startswith("/usr/local")
 
