@@ -99,12 +99,21 @@ jobs:
       id: cache-sdl2
       uses: actions/cache@v4
       with:
+        # SDL2 cache scoped to SDL2 core only. The broad libSDL2* / include
+        # globs used to capture the SDL_image/SDL_mixer siblings, so a run
+        # that still built them (pre-g4-trim) contaminated this cache. The
+        # !-excludes keep it clean even if a sibling build ever returns, and
+        # the -trim re-key evicts the already-contaminated pre-trim archive.
         path: |
           prebuilt/linux/x86_64/lib/libSDL2*
+          !prebuilt/linux/x86_64/lib/libSDL2_image*
+          !prebuilt/linux/x86_64/lib/libSDL2_mixer*
           prebuilt/linux/x86_64/include/SDL2
+          !prebuilt/linux/x86_64/include/SDL2/SDL_image.h
+          !prebuilt/linux/x86_64/include/SDL2/SDL_mixer.h
           prebuilt/linux/x86_64/lib/pkgconfig/sdl2.pc
           prebuilt/linux/x86_64/bin/sdl2-config
-        key: sdl2-ubuntu-${{ steps.cache-keys.outputs.sdl2-hash }}
+        key: sdl2-ubuntu-trim-${{ steps.cache-keys.outputs.sdl2-hash }}
     
     - name: Cache FreeType build
       id: cache-freetype
@@ -450,11 +459,18 @@ jobs:
       id: cache-sdl2
       uses: actions/cache@v4
       with:
+        # SDL2 cache scoped to SDL2 core only (see ubuntu job): the SDL2*
+        # glob captured the SDL_image/SDL_mixer .lib siblings; !-excludes +
+        # -trim re-key keep it clean and evict the contaminated archive.
         path: |
           prebuilt/windows/x86_64/lib/SDL2*
+          !prebuilt/windows/x86_64/lib/SDL2_image*
+          !prebuilt/windows/x86_64/lib/SDL2_mixer*
           prebuilt/windows/x86_64/include/SDL2
+          !prebuilt/windows/x86_64/include/SDL2/SDL_image.h
+          !prebuilt/windows/x86_64/include/SDL2/SDL_mixer.h
           prebuilt/windows/x86_64/bin/SDL2.dll
-        key: sdl2-windows-${{ steps.cache-keys.outputs.sdl2-hash }}
+        key: sdl2-windows-trim-${{ steps.cache-keys.outputs.sdl2-hash }}
     
     - name: Cache FreeType build
       id: cache-freetype
@@ -857,10 +873,17 @@ jobs:
       id: cache-sdl2
       uses: actions/cache@v4
       with:
+        # SDL2 cache scoped to SDL2 core only (see ubuntu job): the libSDL2*
+        # glob captured the SDL_image/SDL_mixer .dylib siblings; !-excludes +
+        # -trim re-key keep it clean and evict the contaminated archive.
         path: |
           prebuilt/macos/arm64/lib/libSDL2*
+          !prebuilt/macos/arm64/lib/libSDL2_image*
+          !prebuilt/macos/arm64/lib/libSDL2_mixer*
           prebuilt/macos/arm64/include/SDL2
-        key: macos-sdl2-${{ steps.cache-keys.outputs.sdl2-hash }}
+          !prebuilt/macos/arm64/include/SDL2/SDL_image.h
+          !prebuilt/macos/arm64/include/SDL2/SDL_mixer.h
+        key: macos-sdl2-trim-${{ steps.cache-keys.outputs.sdl2-hash }}
     
     - name: Build SDL2
       if: steps.cache-sdl2.outputs.cache-hit != 'true'
