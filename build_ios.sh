@@ -43,7 +43,10 @@ build_slice() {
   # HOST_CC stays bare `clang` -- minilua and buildvm run on the *build*
   # machine. CROSS is what redirects the target compiler at the iOS
   # toolchain; CC=clang because LuaJIT's Makefile defaults it to gcc.
-  make -C luajit clean >/dev/null 2>&1 || true
+  # `make clean` leaves enough behind that a second slice reuses the first
+  # slice's objects and silently produces a duplicate of it. Nuke everything
+  # untracked instead -- luajit is a pinned submodule, so this is safe.
+  git -C luajit clean -xfdq
   make -C luajit -j"$(sysctl -n hw.ncpu)" amalg \
     CC=clang \
     HOST_CC=clang \
@@ -57,12 +60,21 @@ build_slice() {
      luajit/src/luaconf.h luajit/src/luajit.h luajit/src/lua.hpp \
      "$prefix/include/luajit-2.1/"
 
-  make -C luajit clean >/dev/null 2>&1 || true
-  echo "    -> $prefix/lib/libluajit.a"
+  # A slice must be the platform it claims: a stale-object reuse silently
+  # ships the previous slice's binary under the new name.
+  local got
+  got=$(otool -l "$prefix/lib/libluajit.a" | awk '/LC_BUILD_VERSION/{f=1} f&&/platform/{print $2; exit}')
+  if [ "$got" != "$4" ]; then
+    echo "build_ios.sh: $name built for platform $got, expected $4" >&2
+    exit 1
+  fi
+  echo "    -> $prefix/lib/libluajit.a (platform $got)"
 }
 
-build_slice arm64     iphoneos        "arm64-apple-ios${MIN_VERSION}"
-build_slice arm64-sim iphonesimulator "arm64-apple-ios${MIN_VERSION}-simulator"
+# Trailing arg is the Mach-O platform each slice must report: 2 = iOS,
+# 7 = iOS Simulator.
+build_slice arm64     iphoneos        "arm64-apple-ios${MIN_VERSION}"           2
+build_slice arm64-sim iphonesimulator "arm64-apple-ios${MIN_VERSION}-simulator" 7
 
 echo
 echo "iOS gamelibs built:"
