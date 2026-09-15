@@ -797,6 +797,12 @@ jobs:
     # macos-15 is the image v0.6.6 built green on.
     runs-on: macos-15
     name: Build macOS ARM64
+    # Explicit macOS floor for everything built here (cmake, clang, LuaJIT's
+    # make, meson). Unset, it floats with the runner image. 15.0 matches the
+    # vendored Homebrew bottles behind libmpv, and rock's
+    # MACOSX_DEPLOYMENT_TARGET must match it.
+    env:
+      MACOSX_DEPLOYMENT_TARGET: "15.0"
     
     steps:
     - uses: actions/checkout@v4
@@ -810,7 +816,7 @@ jobs:
       id: cache-keys
       run: |
         # Cache version - increment this to force cache rebuild
-        CACHE_VERSION="v2"  # bumped: static VC++ CRT (/MT) rebuild of all MSVC libs
+        CACHE_VERSION="v2-macos${MACOSX_DEPLOYMENT_TARGET}"  # floor is baked into every artifact
         
         # Add manual cache clear suffix if requested
         if [ "${{ github.event.inputs.clear_cache }}" = "true" ]; then
@@ -988,7 +994,7 @@ jobs:
       if: steps.cache-luajit.outputs.cache-hit != 'true'
       run: |
         cd luajit
-        make -j$(sysctl -n hw.ncpu) PREFIX=$PWD/../prebuilt/macos/arm64 MACOSX_DEPLOYMENT_TARGET=11.0 TARGET_FLAGS="-arch arm64"
+        make -j$(sysctl -n hw.ncpu) PREFIX=$PWD/../prebuilt/macos/arm64 TARGET_FLAGS="-arch arm64"
         make install PREFIX=$PWD/../prebuilt/macos/arm64
         cd ..
         echo "✓ LuaJIT built and installed"
