@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+# Refuses content that must not appear in a public repository.
+# Usage: check-public <file-with-text>   (reads the text to check)
+set -euo pipefail
+text_file="$1"
+patterns=(
+  '/home/[a-z_][a-z0-9_-]*/'
+  '/Users/[A-Za-z0-9_-]+/'
+  '/Volumes/[A-Za-z0-9_-]+/'
+  '-----BEGIN [A-Z ]*PRIVATE KEY-----'
+)
+denylist="${HOME}/.config/rock-lang/denylist"
+if [[ -f "$denylist" ]]; then
+  while IFS= read -r line; do
+    [[ -n "$line" && "$line" != \#* ]] && patterns+=("$line")
+  done < "$denylist"
+else
+  # Without the private names the check passes leaks, so it refuses to run.
+  echo "check-public: no private deny-list at $denylist; install it before committing" >&2
+  exit 1
+fi
+status=0
+for p in "${patterns[@]}"; do
+  if grep -nEi -e "$p" "$text_file" >&2; then
+    echo "check-public: matched forbidden pattern: $p" >&2
+    status=1
+  fi
+done
+# Citations must resolve in this repository, including nested doc directories.
+root="$(git rev-parse --show-toplevel)"
+while IFS= read -r doc; do
+  if [[ ! -f "$root/$doc" ]]; then
+    echo "check-public: missing documentation: $doc" >&2
+    status=1
+  fi
+done < <(grep -oE 'docs/([A-Za-z0-9_-]+/)*[A-Za-z0-9_-]+[.]md' "$text_file" | sort -u)
+exit $status

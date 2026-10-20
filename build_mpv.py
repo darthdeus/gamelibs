@@ -2,7 +2,7 @@
 """
 Build libmpv + FFmpeg as a version-consistent unit via mpv-build.
 
-See BUILD_MPV.md for the why, the pinned-version contract, and the
+See docs/build-mpv.md for the why, the pinned-version contract, and the
 critical "ONE FFmpeg in the process" constraint. The short version:
 mpv-build clones pinned FFmpeg + mpv and compiles them against each
 other, so libmpv and libav* can never ABI-skew. We build FFmpeg
@@ -16,7 +16,6 @@ libav*/libsw* shared libs + headers + pkgconfig, install names
 rewritten to @rpath (macOS) / $ORIGIN (linux) so existing consumer
 rpaths resolve them with no new wiring.
 
-Status: Phase 1 (macOS arm64). Linux = Phase 2 (CI), Windows = Phase 3.
 """
 
 import os
@@ -26,10 +25,10 @@ import subprocess
 import sys
 from pathlib import Path
 
-# --- Pinned version contract (see BUILD_MPV.md "Core decision") -------
+# --- Pinned version contract (see docs/build-mpv.md "Core decision") -------
 # mpv-build tracks ffmpeg/mpv as git submodules; we pin all three.
 # Update deliberately, never float. Record the resolved tags back into
-# BUILD_MPV.md once a build succeeds.
+# docs/build-mpv.md once a build succeeds.
 MPV_BUILD_REPO = "https://github.com/mpv-player/mpv-build.git"
 # mpv-build itself, pinned to a SHA (its scripts/configure flags are
 # part of the contract too).
@@ -50,7 +49,7 @@ MPV_TAG = "v0.40.0"
 # libass just makes that dependency unresolvable. Shipping a *system*
 # libass would re-introduce an un-vendored runtime dep, defeating the
 # whole point. So mpv-build builds libass static and links it into
-# libmpv -- self-contained, exactly as on the Phase-2 mac/linux build.
+# libmpv -- self-contained, as on mac/linux.
 LIBASS_REF = "release"
 LIBPLACEBO_REF = "release"
 # libx264: the H.264 software encoder. mpv-build does NOT manage x264
@@ -115,7 +114,7 @@ def clone_mpv_build(work: Path) -> Path:
     # "@<ref>" form maps to `git checkout <ref>`; "release" = latest
     # upstream release tag. This is what makes the build reproducible --
     # a bare post-update `git checkout` got reset by the next ./update
-    # (the gap recorded in BUILD_MPV.md).
+    # (the gap recorded in docs/build-mpv.md).
     cfg = mb / "config"
     cfg.mkdir(exist_ok=True)
     write_lf(cfg / "branch-ffmpeg", f"@{FFMPEG_TAG}\n")
@@ -285,7 +284,7 @@ def write_options(mb: Path):
 def make_pc_relocatable(pcdir: Path):
     """Rewrite every staged `.pc` so it is self-locating from wherever
     the prefix is extracted, instead of baking the CI build host's
-    absolute paths (Bug 1, CONSUMER_CUTOVER_FIXES.md).
+    absolute paths.
 
     ffmpeg's `.pc` bake an absolute `prefix`/`libdir`/`includedir`
     pointing at the runner's `build_libs` (nonexistent on any consumer);
@@ -751,7 +750,7 @@ def main():
     for f in sorted((prefix / "lib").glob("*")):
         print(" ", f.name)
     print("\nNext: wire stone-video/build.rs to this prefix and rerun "
-          "the fm audio probe (BUILD_MPV.md Phase 1).", flush=True)
+          "the fm audio probe (docs/build-mpv.md).", flush=True)
 
 
 if __name__ == "__main__":

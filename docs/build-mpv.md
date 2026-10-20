@@ -1,7 +1,5 @@
 # Vendoring libmpv + FFmpeg into gamelibs
 
-> Living plan. Describes **current state + what's next**, not history.
-> Cite commits for past decisions. Update checkboxes in place.
 
 ## Why
 
@@ -81,83 +79,16 @@ macOS: rewrite install names to `@rpath/<name>` and inter-lib refs via
 `stone-rs/build.rs:39`) resolves them with zero new wiring. Linux:
 `-Wl,-rpath,$ORIGIN`. Windows: DLLs are co-located, no rpath concept.
 
-## Phases
+## Platform notes
 
-### Phase 1 — macOS arm64 build + local fix — IN PROGRESS
+### libass is static inside libmpv
 
-The dev machine and the machine that hit the bug. Verifiable here;
-structurally fixes the incident.
+mpv 0.40 has a hard `dependency('libass')` and no meson option to drop
+it, so libass is built static and linked into libmpv, like libplacebo.
+macOS and Linux use mpv-build's autotools step; Windows builds it with
+Meson (`build_libass_meson`) because autoreconf breaks under MSYS2.
 
-- [x] `build_mpv.py` written; FFmpeg + libmpv **both compile clean**
-      (`[258/258] Linking libmpv.2.dylib`). Shared-FFmpeg override
-      works: `--enable-libavdevice` was invalid (aborted configure) →
-      corrected to `--enable-avdevice`.
-- [x] **Version consistency proven**: `libmpv.2.dylib` links
-      `libavcodec.62.dylib current 62.32.100`, identical to the staged
-      `libavcodec.62.32.100.dylib`. The skew bug is structurally gone.
-- [x] `stage()` corrected: meson emits `libmpv.2.dylib` + a
-      `libmpv.2.dylib.p/` *build dir* (old rglob copied the dir →
-      `IsADirectoryError`). Now explicit paths + symlink-chain
-      preservation + `mpv.pc` from `mpv/build/meson-private/`.
-- [x] **Pin-stick gap FIXED.** Root: `./rebuild` runs `./update` which
-      resets refs to master, undoing a post-update `git checkout`.
-      Correct mechanism = mpv-build's `config/branch-<project>` files
-      (`@<ref>`), honored by `./update` every run. `build_mpv.py` now
-      writes them; pins recorded in **Core decision**. Reproducible.
-- [x] Resolved pins recorded in **Core decision**.
-- [ ] **(Superseded by Phase 2 — CI is the staging path now.)** Local
-      `prebuilt/gamelibs-macos-arm64/` staging was only for the
-      pre-CI bringup; per the "build in CI for all platforms, then
-      `make download`" decision, the durable path is gamelibs CI →
-      release → consumer download. No local-artifact wiring of
-      `stone-video/build.rs`.
-- [ ] `stone-video/build.rs`: resolve vendored prefix like
-      `stone-rs/build.rs` (`prebuilt/gamelibs-<plat>/`); set
-      `PKG_CONFIG_LIBDIR`/`PKG_CONFIG_PATH` to the vendored
-      `lib/pkgconfig`; link `mpv` + `libavdevice` from there; add
-      rpath. Keep system `pkg-config` as a fallback **only** when the
-      vendored prefix is absent (CI runners without a gamelibs
-      checkout) — log which path was taken, never silently.
-- [ ] Rebuild `libstone_video`, rerun the fm audio probe
-      (`/tmp/cprobe.lua` pattern): handle non-null, open ok, position
-      advances, **no crash**, audio audible.
-- [ ] `otool -L libstone_video.dylib` + `otool -L libmpv.2.dylib`:
-      every libav\* current_version identical between the two.
-
-### Phase 2 — macOS + Linux via CI — DONE (run 25934244764, 943ac59)
-
-- [x] mpv cache+build steps wired into the `ubuntu` and `macos` jobs
-      (mirrors SDL2 cache pattern; key = hash of `build_mpv.py`, which
-      embeds the pins).
-- [x] CI dep gap fixed (the "works on my machine" trap a dev box
-      hides): libass needs **fribidi** (+fontconfig+harfbuzz) and
-      **autotools** — added `libfribidi-dev`/`libfontconfig1-dev`/
-      `libharfbuzz-dev` (ubuntu apt) and `autoconf automake libtool
-      fribidi fontconfig harfbuzz` (macos brew).
-- [x] **Pins validated in CI**: built FFmpeg 7.x (libavformat
-      61.7.100, libavutil 59.39.100) + libmpv 2.5.0 (mpv 0.40.0) —
-      proves `config/branch-*` pinning is honored and reproducible
-      (the earlier unpinned local build was FFmpeg 8.x).
-- [x] Both artifacts contain libmpv + libav*/libsw* with intact
-      symlink chains, `@rpath`(macOS)/`$ORIGIN`(linux) staged into the
-      existing `gamelibs-{linux-x86_64,macos-arm64}.zip`.
-
-### libass dropped (decided 2026-05-16, all platforms)
-
-mpv now builds `-Dlibass=disabled` and mpv-build's unconditional
-libass step is patched out of its `build` script (`build_mpv.py`
-`clone_mpv_build()`). libass = SSA/ASS subtitle rendering, used by
-**no** consumer (fm audio preview, anvil video preview, recorder/
-export via ffmpeg-the-third). It was also the single most fragile
-link: its autotools/gettext `autoreconf` hit an MSYS2<->MINGW
-path-mangling bug that consumed six Windows CI rounds — `aclocal:
-.../progtest.m4 does not exist` while `ls` proved the file present,
-because a mingw tool handed aclocal a Windows-rooted path that is not
-a valid MSYS mount. Uniform on every platform: smaller libmpv, one
-fewer dep, no behaviour change for our use cases. If subtitles are
-ever needed, revisit with a non-autotools libass path.
-
-### Phase 3 — Windows x86_64 — self-built via MSYS2 — DONE (run 25960133197)
+### Windows x86_64: self-built via MSYS2
 
 All three platforms green with real artifacts (Windows: `libmpv-2.dll`
 + `av*/sw*/postproc` DLLs, FFmpeg n7.1.1 ABI — `avcodec-61` etc. —
@@ -244,7 +175,7 @@ Risk is real (MSYS2 toolchain wiring in CI is fiddlier than apt/brew)
 but it is the *correct* risk — owned, reproducible, uniform. Not
 blocking the mac/linux cutover.
 
-### macOS cache-key bug (latent, pre-existing, repo-wide)
+### macOS cache key
 
 The `Generate cache keys` step uses `sha256sum`, which **does not exist
 on macOS runners** — every `*-macos-*` cache key degrades to the
@@ -259,7 +190,7 @@ have the constant-key bug — out of scope here, but they silently never
 rebuild on macOS until someone bumps `CACHE_VERSION`. Worth a separate
 gamelibs cleanup.
 
-### Windows vcruntime140 gap (pre-existing, repo-wide, fixed post-v0.6.3)
+### Windows vcruntime140
 
 Found while verifying the v0.6.3 Windows bundle. The 6 **MSVC**-built
 DLLs (`SDL2_image`, `SDL2_mixer`, `cimgui_complete`, `freetype`,
@@ -284,73 +215,6 @@ build time. `CACHE_VERSION` v1→v2 (all jobs) forces the clean rebuild.
 Assumes Windows 10+ (UCRT as OS component); pre-Win10 consumers would
 also need the UCRT redist — acceptable floor for a modern game-lib repo.
 
-### Packaging bugs found at consumer install (v0.6.0) — Linux fixed v0.6.1, macOS pending v0.6.2
-
-1. **No `.pc` files shipped.** FFmpeg installs pkgconfig under
-   `build_libs/lib/pkgconfig/*.pc`, but `build_mpv.py stage()` only
-   scanned `build_libs/lib/` for `*.pc` (wrong dir) — so the zip has
-   zero `libav*.pc` / `mpv.pc`. Consequence: consumers can't point
-   `PKG_CONFIG_PATH` at the vendored prefix. Fix `stage()` to copy
-   `build_libs/lib/pkgconfig/*` and the meson `mpv.pc`.
-2. **Symlinks dereferenced in the zip.** CI staging preserves the
-   `libfoo.dylib -> .N -> .N.M.P` chain, but the workflow's
-   `zip -r` (macOS/linux) follows symlinks → 3× full copies (~42MB
-   zip, 3×12MB libavcodec). Add `-y` (zip store-symlinks) to the
-   `Create release archive` steps in the ubuntu + macos jobs.
-
-Both are gamelibs-side; functional (linking still resolves) but must
-be fixed for a clean prefix + sane artifact size, then `make
-release-minor` again (→ v0.6.1).
-
-### Phase 4 — Release + consumer cutover
-
-> **Three consumer-found bugs fixed in code (`build_mpv.py` +
-> workflow); release pending.** See `CONSUMER_CUTOVER_FIXES.md`.
-
-- [x] **Bug 1 — relocatable `.pc`.** `make_pc_relocatable()` rewrites
-      every staged `.pc`'s `prefix`/`exec_prefix`/`libdir`/`includedir`
-      to `${pcfiledir}`-relative (prefix = `${pcfiledir}/../..`). Called
-      from both `stage()` and `stage_windows()`; `Requires`/`Libs`/
-      `Cflags` left intact. Verified locally against ffmpeg-style
-      (absolute) and meson-style (`/opt/homebrew`) `.pc`.
-- [x] **Bug 2 — self-contained libmpv. Chose option (a): bundle.**
-      `fix_macos_install_names()` now recursively vendors every
-      `/opt/homebrew` + `/usr/local` dep into `<prefix>/lib` with
-      `-id @rpath/<name>` and re-points all referrers (worklist walk:
-      harfbuzz→graphite2/glib, fontconfig→expat/png/freetype, …), then
-      asserts no external dep remains. Linux: `fix_linux_rpath()`
-      vendors the libass font/codec stack via an **allowlist** of
-      sonames (`_LINUX_VENDOR_STEMS`) — GPU/display libs
-      (GL/X11/wayland/vulkan/drm) are deliberately left system.
-      Windows: `bundle_windows_deps()` recursively copies the mingw
-      font DLLs (libass is static-in-libmpv; its harfbuzz/fribidi/
-      fontconfig/freetype/lcms2 are dynamic) into `bin/`, skipping the
-      Windows system dir. Each platform has a post-bundle leak assert.
-- [x] **Bug 3 — cache-hit completeness.** mpv cache `path:` on all
-      three jobs broadened to libpostproc + `pkgconfig/{mpv,libav*,
-      libsw*,libpostproc*,libplacebo,libass}.pc` + matching headers
-      (targeted globs, not whole `bin/`/`pkgconfig/` — those are shared
-      with SDL2/etc. in the same job). The recursively-vendored
-      font/codec libs have arbitrary sonames and can't be globbed, so
-      the cache step is also **skipped on tag builds**
-      (`if: !startsWith(github.ref,'refs/tags/')`) → every release
-      full-rebuilds into a complete, self-contained bundle. Dev/branch
-      cache hits stay fast (bundled-dep gap is irrelevant: not shipped).
-- [ ] **Release** — version decision pending (`.version`=0.6.2;
-      `CONSUMER_CUTOVER_FIXES.md` rock-sfx parked note expects v0.6.3
-      patch, this section originally said minor bump). Confirm with
-      human, then `make release[-minor]`, push tag, CI publishes
-      per-platform zips.
-- [ ] rock-sfx: `make download` refresh; delete the
-      `pkg_config`-fallback branch in `stone-video/build.rs` once all
-      three platforms ship vendored (fallback existed only to bridge
-      Phase 1→4).
-- [ ] Drop the `// TODO: vendor libmpv` comment in
-      `stone-video/build.rs`; update `gamelibs/CLAUDE.md` (planned →
-      shipped) and `gamelibs/README.md` library list.
-- [ ] Update `gamelibs/build_local.sh` + `library_info.txt` generation
-      to include mpv/ffmpeg versions.
-
 ## Gotchas / risks
 
 - **avdevice must be enabled** in the FFmpeg configure or the Anvil
@@ -372,18 +236,14 @@ release-minor` again (→ v0.6.1).
   FFmpeg major. Check the crate's supported range when picking the
   FFmpeg tag; if `ffmpeg-the-third = "5.0"` caps below the chosen
   FFmpeg, bump the crate in the same change.
-- Windows is the schedule risk; Phases 1–2 deliver the actual bug fix
-  for dev + Linux CI, so don't block them on Phase 3.
 
 ## Status
 
-CI green on all three platforms with real artifacts (run 25960133197).
-Phases 1–3 done. **Phase 4: the three consumer-cutover bugs are fixed
-in code** (relocatable `.pc`; recursive external-dep bundling on
-mac/linux/windows — option (a); cache skipped on tag builds) — see the
-Phase 4 checklist above. Not yet released: awaiting the version
-decision, then a tag build publishes per-platform zips, then the
-rock-sfx consumer cutover (`stone-video/build.rs` → vendored prefix,
-delete the pkg-config fallback). Until that lands, the rock-sfx
-interim remains `brew reinstall --build-from-source mpv` to realign
-Homebrew mpv with current ffmpeg and unblock fm audio.
+Shipped since v0.6.3 on Linux x86_64, macOS arm64 and Windows x86_64.
+Staged `.pc` files are rewritten to be relocatable, external runtime
+dependencies are bundled per platform, and tag builds skip the cache.
+`stone-video` links the vendored prefix only.
+
+Next: publish the media stack as a separate download from the core
+libraries, since this FFmpeg build is GPL (`--enable-gpl`, libx264), and
+ship licence notices for every bundled library.

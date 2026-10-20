@@ -418,61 +418,6 @@ def build_library():
     os.chdir("..")
     return False
 
-def update_rock_file():
-    """Update test_gl_triangle.rock to use the built library"""
-    print_step("Updating Rock test file...")
-    
-    test_file = Path("test_gl_triangle.rock")
-    if not test_file.exists():
-        print_warning("test_gl_triangle.rock not found, skipping update")
-        return True
-    
-    # Read current content
-    content = test_file.read_text()
-    
-    # Get absolute path to library
-    lib_path = (Path.cwd() / "libs" / f"{LIB_PREFIX}cimgui_complete{LIB_EXT}").resolve()
-    
-    # Update library path
-    old_patterns = [
-        "/home/darth/projects/rock-headers/libs/libcimgui.so",
-        "/home/darth/projects/rock-headers/libs/libcimgui_backends.so",
-        "/home/darth/projects/rock-headers/libs/cimgui_complete.so"
-    ]
-    
-    for pattern in old_patterns:
-        content = content.replace(pattern, str(lib_path))
-    
-    # Ensure we're using single library loading
-    if "local cimgui = ffi.load" in content and "local backends = ffi.load" in content:
-        # Fix double library loading
-        content = content.replace(
-            """local cimgui = ffi.load""",
-            """local lib = ffi.load"""
-        )
-        # Remove second load
-        lines = content.split('\n')
-        new_lines = []
-        skip_next = False
-        for line in lines:
-            if skip_next:
-                skip_next = False
-                continue
-            if "local backends = ffi.load" in line:
-                skip_next = True
-                continue
-            new_lines.append(line)
-        content = '\n'.join(new_lines)
-        
-        # Update function references
-        content = content.replace("cimgui.", "lib.")
-        content = content.replace("backends.", "lib.")
-    
-    # Write back
-    test_file.write_text(content)
-    print_success("Rock file updated")
-    return True
-
 def test_build():
     """Quick test to verify the build works"""
     print_step("Testing build...")
@@ -544,11 +489,8 @@ def main():
         print_error("\nBuild failed!")
         return 1
     
-    # Only update Rock files and test in local mode
+    # Only test in local mode
     if not CI_MODE:
-        if not update_rock_file():
-            print_warning("\nCould not update Rock file")
-        
         if test_build():
             print(f"\n{'='*60}")
             print(f"   BUILD SUCCESSFUL!")

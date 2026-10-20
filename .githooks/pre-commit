@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+set -euo pipefail
+hooks="$(dirname "$0")"
+tmp="$(mktemp)"
+trap 'rm -f "$tmp"' EXIT
+# Added lines only; vendored upstream trees keep their own text.
+git diff --cached --no-color -U0 -- . ':!SDL2-2.32.4' ':!freetype-2.14.1' ':!ufbx' \
+  | { grep -E '^\+' || true; } | { grep -vE '^\+\+\+ ' || true; } > "$tmp"
+"$hooks/check-public" "$tmp"
+if command -v gitleaks >/dev/null 2>&1; then
+  gitleaks git --staged --no-banner --redact .
+else
+  echo "pre-commit: warning: gitleaks not on PATH; secret scan skipped" >&2
+fi
