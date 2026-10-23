@@ -57,6 +57,7 @@ python3 build_imgui.py \
 
 # Build LuaJIT
 echo "Building LuaJIT..."
+./apply-luajit-patches.sh
 cd luajit
 make -j$(nproc) PREFIX=$PWD/../prebuilt/linux/x86_64
 make install PREFIX=$PWD/../prebuilt/linux/x86_64

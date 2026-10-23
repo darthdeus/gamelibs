@@ -1,0 +1,346 @@
+diff --git a/Makefile b/Makefile
+index 2e97ed6a..3086d548 100644
+--- a/Makefile
++++ b/Makefile
+@@ -95,7 +95,7 @@ FILE_A= libluajit.a
+ FILE_SO= libluajit.so
+ FILE_MAN= luajit.1
+ FILE_PC= luajit.pc
+-FILES_INC= lua.h lualib.h lauxlib.h luaconf.h lua.hpp luajit.h
++FILES_INC= lua.h lualib.h lauxlib.h luaconf.h lua.hpp luajit.h luajit-health.h
+ FILES_JITLIB= bc.lua bcsave.lua dump.lua p.lua v.lua zone.lua \
+ 	      dis_x86.lua dis_x64.lua dis_arm.lua dis_arm64.lua \
+ 	      dis_arm64be.lua dis_ppc.lua dis_mips.lua dis_mipsel.lua \
+diff --git a/src/lj_asm.c b/src/lj_asm.c
+index 4818c68d..db663554 100644
+--- a/src/lj_asm.c
++++ b/src/lj_asm.c
+@@ -1930,6 +1930,78 @@ static void asm_head_root(ASMState *as)
+   as->T->topslot = gcref(as->T->startpt)->pt.framesize;
+ }
+ 
++/* Bounded first-example context, armed outside compiler hooks. */
++static void asm_health_coal(ASMState *as, uint32_t reason, IRRef failed,
++                            RegSet allow, RegSet live, uint32_t inherited)
++{
++  jit_State *J = as->J;
++  luaJIT_HealthCoal *c;
++  GCtrace *P = as->parent;
++  SnapShot *snap = &P->snap[J->exitno];
++  uint64_t oldest, seq;
++  uint32_t n;
++  IRRef i;
++  if (!(J->health_flags & LUAJIT_HEALTH_COALESCING)) goto fail;
++  oldest = J->health.ring_next > LUAJIT_HEALTH_RING ? J->health.ring_next-LUAJIT_HEALTH_RING : 0;
++  for (seq = oldest; seq < J->health.ring_next; seq++) {
++    c = &J->health_ring[seq % LUAJIT_HEALTH_RING];
++    if (c->parent_uid == P->health_uid && c->exitno == J->exitno &&
++        c->subreason == reason && c->failed_ref == failed) {
++      c->occurrences++;
++      goto fail;
++    }
++  }
++  seq = J->health.ring_next++;
++  if (seq >= LUAJIT_HEALTH_RING) J->health.ring_overflow++;
++  c = &J->health_ring[seq % LUAJIT_HEALTH_RING];
++  memset(c, 0, sizeof(*c));
++  c->sequence = seq; c->occurrences = 1;
++  c->generation = J->health.generation; c->parent_uid = P->health_uid;
++  c->parent = J->parent; c->exitno = J->exitno; c->subreason = reason;
++  c->start_proto = (uintptr_t)gcref(J->cur.startpt);
++  c->failure_proto = (uintptr_t)J->pt;
++  c->start_pc = proto_bcpos(&gcref(J->cur.startpt)->pt, mref(J->cur.startpc, BCIns));
++  c->failure_pc = J->pt ? proto_bcpos(J->pt, J->pc) : UINT32_MAX;
++  c->framedepth = J->framedepth; c->baseslot = J->baseslot; c->maxslot = J->maxslot;
++  c->snapshot = J->exitno; c->snapshot_entries = snap->nent; c->snapshot_slots = snap->nslots;
++  c->inherited = inherited; c->failed_ref = failed; c->failed_slot = UINT32_MAX;
++  c->allow_gpr = allow & RSET_GPR; c->allow_fpr = allow & RSET_FPR;
++  c->free_gpr = as->freeset & RSET_GPR; c->free_fpr = as->freeset & RSET_FPR;
++  c->live_gpr = live & RSET_GPR; c->live_fpr = live & RSET_FPR;
++  if (failed >= REF_FIRST && failed <= as->stopins) {
++    IRIns *ir = IR(failed);
++    if (ir->o == IR_SLOAD) c->failed_slot = ir->op1;
++    else if (ir->o == IR_PVAL) for (n = 0; n < snap->nent; n++) {
++      SnapEntry sn = P->snapmap[snap->mapofs+n];
++      if (snap_ref(sn) == ir->op1+REF_BIAS) { c->failed_slot = snap_slot(sn); break; }
++    }
++    c->failed_type = irt_type(ir->t);
++    c->parent_regsp = as->parentmap[failed-REF_FIRST];
++    c->target_reg = ir->r; c->target_spill = ir->s;
++  }
++  c->slot_count = snap->nent < LUAJIT_HEALTH_SLOTS ? snap->nent : LUAJIT_HEALTH_SLOTS;
++  c->slots_truncated = snap->nent-c->slot_count;
++  for (n = 0; n < c->slot_count; n++) {
++    SnapEntry sn = P->snapmap[snap->mapofs+n];
++    luaJIT_HealthSlot *s = &c->slots[n];
++    s->slot = snap_slot(sn); s->parent_ref = snap_ref(sn); s->flags = sn & ~0xffff;
++    s->parent_regsp = s->child_ref = s->child_type = s->child_reg = s->child_spill = UINT32_MAX;
++    /* regspmap has already resolved rename chains and snapshot allocation. */
++    for (i = REF_FIRST; i <= (reason == 4 ? REF_BASE+inherited : as->stopins); i++) {
++      IRIns *ir = IR(i);
++      if ((ir->o == IR_SLOAD && ir->op1 == s->slot) ||
++          (ir->o == IR_PVAL && ir->op1+REF_BIAS == s->parent_ref)) {
++        s->child_ref = i; s->child_type = irt_type(ir->t);
++        s->child_reg = ir->r; s->child_spill = ir->s;
++        s->parent_regsp = reason == 4 ? ir->prev : as->parentmap[i-REF_FIRST];
++        break;
++      }
++    }
++  }
++fail:
++  lj_trace_err(J, LJ_TRERR_NYICOAL);
++}
++
+ /* Head of a side trace.
+ **
+ ** The current simplistic algorithm requires that all slots inherited
+@@ -2017,7 +2089,7 @@ static void asm_head_side(ASMState *as)
+ 	  continue;  /* Same spill slot, do nothing. */
+ 	mask = ((!LJ_SOFTFP && irt_isfp(ir->t)) ? RSET_FPR : RSET_GPR) & allow;
+ 	if (mask == RSET_EMPTY)
+-	  lj_trace_err(as->J, LJ_TRERR_NYICOAL);
++	  asm_health_coal(as, 1, i, allow, live, as->stopins-REF_BASE);
+ 	r = ra_allocref(as, i, mask);
+ 	ra_save(as, ir, r);
+ 	rset_clear(allow, r);
+@@ -2082,13 +2154,13 @@ static void asm_head_side(ASMState *as)
+     if (live & RSET_GPR) {
+       RegSet tmpset = as->freeset & ~live & allow & RSET_GPR;
+       if (tmpset == RSET_EMPTY)
+-	lj_trace_err(as->J, LJ_TRERR_NYICOAL);
++	asm_health_coal(as, 2, sloadins[rset_pickbot(live & RSET_GPR)], allow, live, as->stopins-REF_BASE);
+       ra_rename(as, rset_pickbot(live & RSET_GPR), rset_pickbot(tmpset));
+     }
+     if (!LJ_SOFTFP && (live & RSET_FPR)) {
+       RegSet tmpset = as->freeset & ~live & allow & RSET_FPR;
+       if (tmpset == RSET_EMPTY)
+-	lj_trace_err(as->J, LJ_TRERR_NYICOAL);
++	asm_health_coal(as, 3, sloadins[rset_pickbot(live & RSET_FPR)], allow, live, as->stopins-REF_BASE);
+       ra_rename(as, rset_pickbot(live & RSET_FPR), rset_pickbot(tmpset));
+     }
+     checkmclim(as);
+@@ -2234,7 +2306,7 @@ static void asm_setup_regsp(ASMState *as)
+     uint16_t *p;
+     lastir = lj_snap_regspmap(as->J, as->parent, as->J->exitno, ir);
+     if (lastir - ir > LJ_MAX_JSLOTS)
+-      lj_trace_err(as->J, LJ_TRERR_NYICOAL);
++      asm_health_coal(as, 4, 0, 0, 0, (uint32_t)(lastir-ir));
+     as->stopins = (IRRef)((lastir-1) - as->ir);
+     for (p = as->parentmap; ir < lastir; ir++) {
+       RegSP rs = ir->prev;
+diff --git a/src/lj_jit.h b/src/lj_jit.h
+index af50e5c1..bfb64ed4 100644
+--- a/src/lj_jit.h
++++ b/src/lj_jit.h
+@@ -9,6 +9,7 @@
+ #include "lj_obj.h"
+ #if LJ_HASJIT
+ #include "lj_ir.h"
++#include "luajit-health.h"
+ 
+ /* -- JIT engine flags ---------------------------------------------------- */
+ 
+@@ -263,6 +264,7 @@ typedef struct GCtrace {
+   GCRef startpt;	/* Starting prototype. */
+   MRef startpc;		/* Bytecode PC of starting instruction. */
+   BCIns startins;	/* Original bytecode of starting instruction. */
++  uint64_t health_uid; /* VM-lifetime successful compile identity. */
+   MSize szmcode;	/* Size of machine code. */
+   MCode *mcode;		/* Start of machine code. */
+ #if LJ_ABI_PAUTH
+@@ -517,6 +519,10 @@ typedef struct jit_State {
+   BCLine prev_line;	/* Previous line. */
+   int prof_mode;	/* Profiling mode: 0, 'f', 'l'. */
+ #endif
++  luaJIT_Health health;
++  luaJIT_HealthCoal *health_ring; /* Explicitly armed native diagnostic storage. */
++  uint32_t health_flags;
++  uint64_t health_retired_free, health_reserved;
+ } jit_State;
+ 
+ #ifdef LUA_USE_ASSERT
+diff --git a/src/lj_mcode.c b/src/lj_mcode.c
+index f560a983..ca6e6e0e 100644
+--- a/src/lj_mcode.c
++++ b/src/lj_mcode.c
+@@ -372,6 +372,8 @@ static void mcode_allocarea(jit_State *J)
+   MCode *oldarea = J->mcarea;
+   size_t sz = (size_t)J->param[JIT_P_sizemcode] << 10;
+   J->mcarea = (MCode *)mcode_alloc(J, sz);
++  if (oldarea)
++    J->health_retired_free += (uint64_t)((char *)J->mctop - (char *)J->mcbot);
+   J->szmcarea = sz;
+   J->mcprot = MCPROT_GEN;
+   J->mctop = (MCode *)((char *)J->mcarea + J->szmcarea);
+@@ -380,6 +382,7 @@ static void mcode_allocarea(jit_State *J)
+   ((MCLink *)J->mcarea)->size = sz;
+   J->szallmcarea += sz;
+   J->mcbot = (MCode *)lj_err_register_mcode(J->mcarea, sz, (uint8_t *)J->mcbot);
++  J->health_reserved += (uint64_t)((char *)J->mctop - (char *)J->mcbot);
+ }
+ 
+ /* Free all MCode areas. */
+@@ -388,6 +391,7 @@ void lj_mcode_free(jit_State *J)
+   MCode *mc = J->mcarea;
+   J->mcarea = NULL;
+   J->szallmcarea = 0;
++  J->health_retired_free = J->health_reserved = 0;
+   while (mc) {
+     MCode *next = ((MCLink *)mc)->next;
+     size_t sz = ((MCLink *)mc)->size;
+diff --git a/src/lj_trace.c b/src/lj_trace.c
+index 24a1f7e4..8875bb0e 100644
+--- a/src/lj_trace.c
++++ b/src/lj_trace.c
+@@ -7,6 +7,25 @@
+ #define LUA_CORE
+ 
+ #include "lj_obj.h"
++#include <stdlib.h>
++#include "luajit-health.h"
++
++LUA_API int luaJIT_vmcategory(lua_State *L)
++{
++  int32_t s = G(L)->vmstate;
++  if (s == ~LJ_VMST_RECORD || s == ~LJ_VMST_OPT || s == ~LJ_VMST_ASM) return 1;
++  return s == ~LJ_VMST_GC ? 2 : 0;
++}
++
++#if !LJ_HASJIT
++LUA_API int luaJIT_health_read(lua_State *L, uint32_t v, void *o, size_t n)
++{ UNUSED(L); UNUSED(v); UNUSED(o); UNUSED(n); return 0; }
++LUA_API int luaJIT_health_configure(lua_State *L, uint32_t v, uint32_t f)
++{ UNUSED(L); UNUSED(v); UNUSED(f); return 0; }
++LUA_API int luaJIT_health_coalescing(lua_State *L, uint32_t v, uint64_t first,
++                                   void *o, size_t stride, uint32_t n)
++{ UNUSED(L); UNUSED(v); UNUSED(first); UNUSED(o); UNUSED(stride); UNUSED(n); return -1; }
++#endif
+ 
+ #if LJ_HASJIT
+ 
+@@ -49,6 +68,56 @@ void lj_trace_err_info(jit_State *J, TraceError e)
+   lj_err_throw(J->L, LUA_ERRRUN);
+ }
+ 
++/* The snapshot is O(1), independent of trace population. */
++LUA_API int luaJIT_health_read(lua_State *L, uint32_t version, void *out, size_t size)
++{
++  jit_State *J;
++  luaJIT_Health *h;
++  uint64_t gap;
++  if (!L || version != LUAJIT_HEALTH_VERSION || size != sizeof(luaJIT_Health) || !out)
++    return 0;
++  J = L2J(L); h = &J->health;
++  h->version = LUAJIT_HEALTH_VERSION; h->size = sizeof(*h);
++  h->capabilities = LUAJIT_HEALTH_COUNTERS | LUAJIT_HEALTH_COALESCING | LUAJIT_HEALTH_VMCATEGORY;
++  memcpy(h->build_id, "a4c064539ea931274d407e1249b4bb575424a0f4+rock-health-1", sizeof("a4c064539ea931274d407e1249b4bb575424a0f4+rock-health-1"));
++  gap = J->mcarea ? (uint64_t)((char *)J->mctop - (char *)J->mcbot) : 0;
++  h->arena_bytes = J->szallmcarea;
++  h->code_current_free_bytes = gap;
++  h->code_reserved_bytes = J->health_reserved;
++  h->arena_occupied_bytes = h->arena_bytes - J->health_retired_free - gap;
++  memcpy(out, h, sizeof(*h));
++  return 1;
++}
++
++LUA_API int luaJIT_health_configure(lua_State *L, uint32_t version, uint32_t flags)
++{
++  jit_State *J;
++  if (!L || version != LUAJIT_HEALTH_VERSION || (flags & ~LUAJIT_HEALTH_COALESCING)) return 0;
++  J = L2J(L);
++  if (flags && !J->health_ring) {
++    J->health_ring = (luaJIT_HealthCoal *)calloc(LUAJIT_HEALTH_RING, sizeof(luaJIT_HealthCoal));
++    if (!J->health_ring) return 0;
++  }
++  J->health_flags = flags;
++  return 1;
++}
++
++LUA_API int luaJIT_health_coalescing(lua_State *L, uint32_t version, uint64_t first,
++                                   void *out, size_t stride, uint32_t capacity)
++{
++  jit_State *J;
++  uint64_t seq, next, oldest;
++  uint32_t n = 0;
++  if (!L || version != LUAJIT_HEALTH_VERSION || stride != sizeof(luaJIT_HealthCoal) ||
++      (capacity && !out)) return -1;
++  J = L2J(L); next = J->health.ring_next;
++  oldest = next > LUAJIT_HEALTH_RING ? next - LUAJIT_HEALTH_RING : 0;
++  seq = first > oldest ? first : oldest;
++  for (; seq < next && n < capacity; seq++, n++)
++    memcpy((char *)out+n*stride, &J->health_ring[seq % LUAJIT_HEALTH_RING], stride);
++  return (int)n;
++}
++
+ /* -- Trace management ---------------------------------------------------- */
+ 
+ /* The current trace is first assembled in J->cur. The variable length
+@@ -159,6 +228,11 @@ static void trace_save(jit_State *J, GCtrace *T)
+   p += szins;
+   TRACE_APPENDVEC(snap, nsnap, SnapShot)
+   TRACE_APPENDVEC(snapmap, nsnapmap, SnapEntry)
++  T->health_uid = J->health.root_compiles + J->health.side_compiles + 1;
++  if (J->parent) J->health.side_compiles++; else J->health.root_compiles++;
++  J->health.emitted_mcode_bytes += T->szmcode;
++  J->health.live_traces++;
++  J->health.live_mcode_bytes += T->szmcode;
+   J->cur.traceno = 0;
+   J->curfinal = NULL;
+   setgcrefp(J->trace[T->traceno], T);
+@@ -173,6 +247,8 @@ void LJ_FASTCALL lj_trace_free(global_State *g, GCtrace *T)
+ {
+   jit_State *J = G2J(g);
+   if (T->traceno) {
++    J->health.live_traces--;
++    J->health.live_mcode_bytes -= T->szmcode;
+     lj_gdbjit_deltrace(J, T);
+     if (T->traceno < J->freetrace)
+       J->freetrace = T->traceno;
+@@ -291,6 +367,9 @@ int lj_trace_flushall(lua_State *L)
+   }
+   J->cur.traceno = 0;
+   J->freetrace = 0;
++  J->health.flushes++;
++  J->health.generation++;
++  J->health.live_traces = J->health.live_mcode_bytes = 0;
+   /* Clear penalty cache. */
+   memset(J->penalty, 0, sizeof(J->penalty));
+   /* Free the whole machine code and invalidate all exit stub groups. */
+@@ -368,6 +447,8 @@ void lj_trace_freestate(global_State *g)
+   }
+ #endif
+   lj_mcode_free(J);
++  free(J->health_ring);
++  J->health_ring = NULL;
+   lj_mem_freevec(g, J->snapmapbuf, J->sizesnapmap, SnapEntry);
+   lj_mem_freevec(g, J->snapbuf, J->sizesnap, SnapShot);
+   lj_mem_freevec(g, J->irbuf + J->irbotlim, J->irtoplim - J->irbotlim, IRIns);
+@@ -466,6 +547,7 @@ static void trace_start(jit_State *J)
+   J->retryrec = 0;
+   J->ktrace = 0;
+   setgcref(J->cur.startpt, obj2gco(J->pt));
++  if (J->parent) J->health.side_starts++; else J->health.root_starts++;
+ 
+   lj_vmevent_send_(J2G(J), TRACE,
+     TValue savetv = J2G(J)->tmptv;
+@@ -617,6 +699,7 @@ static int trace_abort(jit_State *J)
+   /* Is there anything to abort? */
+   traceno = J->cur.traceno;
+   if (traceno) {
++    if ((uint32_t)e < LUAJIT_HEALTH_REASONS) J->health.aborts[e]++;
+     J->cur.link = 0;
+     J->cur.linktype = LJ_TRLINK_NONE;
+     lj_vmevent_send(J2G(J), TRACE,
+diff --git a/src/luajit_rolling.h b/src/luajit_rolling.h
+index f0b64f2a..e13b3fb8 100644
+--- a/src/luajit_rolling.h
++++ b/src/luajit_rolling.h
+@@ -64,6 +64,8 @@ enum {
+ /* Control the JIT engine. */
+ LUA_API int luaJIT_setmode(lua_State *L, int idx, int mode);
+ 
++#include "luajit-health.h"
++
+ /* Low-overhead profiling API. */
+ typedef void (*luaJIT_profile_callback)(void *data, lua_State *L,
+ 					int samples, int vmstate);
