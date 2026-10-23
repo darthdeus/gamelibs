@@ -32,6 +32,7 @@ int main(int argc, char **argv)
     assert(c->inherited>0 && c->failed_slot<c->snapshot_slots);
     if(c->subreason==1) assert(c->allow_fpr==0);
     assert(c->slots[c->slot_count-1].child_ref!=UINT32_MAX);
+    { unsigned j; for(j=0;j<c->slot_count;j++) assert((c->slots[j].flags & 0xff000000u)==0); }
   }
   assert(luaJIT_health_coalescing(L,1,h.ring_next-1,out.ring,sizeof(out.ring[0]),1)==1);
   assert(h.emitted_mcode_bytes==count(L,"bytes"));

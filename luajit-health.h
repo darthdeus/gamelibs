@@ -37,7 +37,8 @@ typedef struct luaJIT_Health {
 /* 1=no reload register, 2=no GPR cycle temp, 3=no FPR cycle temp,
  * 4=inherited slot limit. Registers/masks use the target's lj_target.h IDs.
  * Slots are parent snapshot slots; child_ref/type/reg/spill describe the
- * matching inherited SLOAD, or UINT32_MAX when none exists. Context is the
+ * matching inherited load, or UINT32_MAX when none exists. flags contains
+ * SNAP_FRAME/CONT/NORESTORE/SOFTFPNUM/KEYINDEX bits, excluding the slot number. Context is the
  * first example of a (parent UID, exit, subreason, failed IR) signature.
  * occurrence count updates while retained. Overwrites count in ring_overflow.
  * Numeric proto addresses are opaque observations, never dereference later.

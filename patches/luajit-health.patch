@@ -12,7 +12,7 @@ index 2e97ed6a..3086d548 100644
  	      dis_x86.lua dis_x64.lua dis_arm.lua dis_arm64.lua \
  	      dis_arm64be.lua dis_ppc.lua dis_mips.lua dis_mipsel.lua \
 diff --git a/src/lj_asm.c b/src/lj_asm.c
-index 4818c68d..db663554 100644
+index 4818c68d..a4e59ee5 100644
 --- a/src/lj_asm.c
 +++ b/src/lj_asm.c
 @@ -1930,6 +1930,78 @@ static void asm_head_root(ASMState *as)
@@ -73,7 +73,7 @@ index 4818c68d..db663554 100644
 +  for (n = 0; n < c->slot_count; n++) {
 +    SnapEntry sn = P->snapmap[snap->mapofs+n];
 +    luaJIT_HealthSlot *s = &c->slots[n];
-+    s->slot = snap_slot(sn); s->parent_ref = snap_ref(sn); s->flags = sn & ~0xffff;
++    s->slot = snap_slot(sn); s->parent_ref = snap_ref(sn); s->flags = sn & (SNAP_FRAME|SNAP_CONT|SNAP_NORESTORE|SNAP_SOFTFPNUM|SNAP_KEYINDEX);
 +    s->parent_regsp = s->child_ref = s->child_type = s->child_reg = s->child_spill = UINT32_MAX;
 +    /* regspmap has already resolved rename chains and snapshot allocation. */
 +    for (i = REF_FIRST; i <= (reason == 4 ? REF_BASE+inherited : as->stopins); i++) {
