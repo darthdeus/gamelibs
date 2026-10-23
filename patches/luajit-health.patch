@@ -12,7 +12,7 @@ index 2e97ed6a..3086d548 100644
  	      dis_x86.lua dis_x64.lua dis_arm.lua dis_arm64.lua \
  	      dis_arm64be.lua dis_ppc.lua dis_mips.lua dis_mipsel.lua \
 diff --git a/src/lj_asm.c b/src/lj_asm.c
-index 4818c68d..a4e59ee5 100644
+index 4818c68d..fe671bdb 100644
 --- a/src/lj_asm.c
 +++ b/src/lj_asm.c
 @@ -1930,6 +1930,78 @@ static void asm_head_root(ASMState *as)
@@ -30,22 +30,22 @@ index 4818c68d..a4e59ee5 100644
 +  uint64_t oldest, seq;
 +  uint32_t n;
 +  IRRef i;
-+  if (!(J->health_flags & LUAJIT_HEALTH_COALESCING)) goto fail;
-+  oldest = J->health.ring_next > LUAJIT_HEALTH_RING ? J->health.ring_next-LUAJIT_HEALTH_RING : 0;
-+  for (seq = oldest; seq < J->health.ring_next; seq++) {
-+    c = &J->health_ring[seq % LUAJIT_HEALTH_RING];
++  if (!(J2GG(J)->health_flags & LUAJIT_HEALTH_COALESCING)) goto fail;
++  oldest = J2GG(J)->health.ring_next > LUAJIT_HEALTH_RING ? J2GG(J)->health.ring_next-LUAJIT_HEALTH_RING : 0;
++  for (seq = oldest; seq < J2GG(J)->health.ring_next; seq++) {
++    c = &J2GG(J)->health_ring[seq % LUAJIT_HEALTH_RING];
 +    if (c->parent_uid == P->health_uid && c->exitno == J->exitno &&
 +        c->subreason == reason && c->failed_ref == failed) {
 +      c->occurrences++;
 +      goto fail;
 +    }
 +  }
-+  seq = J->health.ring_next++;
-+  if (seq >= LUAJIT_HEALTH_RING) J->health.ring_overflow++;
-+  c = &J->health_ring[seq % LUAJIT_HEALTH_RING];
++  seq = J2GG(J)->health.ring_next++;
++  if (seq >= LUAJIT_HEALTH_RING) J2GG(J)->health.ring_overflow++;
++  c = &J2GG(J)->health_ring[seq % LUAJIT_HEALTH_RING];
 +  memset(c, 0, sizeof(*c));
 +  c->sequence = seq; c->occurrences = 1;
-+  c->generation = J->health.generation; c->parent_uid = P->health_uid;
++  c->generation = J2GG(J)->health.generation; c->parent_uid = P->health_uid;
 +  c->parent = J->parent; c->exitno = J->exitno; c->subreason = reason;
 +  c->start_proto = (uintptr_t)gcref(J->cur.startpt);
 +  c->failure_proto = (uintptr_t)J->pt;
@@ -128,8 +128,26 @@ index 4818c68d..a4e59ee5 100644
      as->stopins = (IRRef)((lastir-1) - as->ir);
      for (p = as->parentmap; ir < lastir; ir++) {
        RegSP rs = ir->prev;
+diff --git a/src/lj_dispatch.h b/src/lj_dispatch.h
+index 755590e6..bd22a2d3 100644
+--- a/src/lj_dispatch.h
++++ b/src/lj_dispatch.h
+@@ -107,6 +107,13 @@ typedef struct GG_State {
+ #endif
+   ASMFunction dispatch[GG_LEN_DISP];	/* Instruction dispatch tables. */
+   BCIns bcff[GG_NUM_ASMFF];		/* Bytecode for ASM fast functions. */
++#if LJ_HASJIT
++  /* Keep diagnostics after the VM fields with immediate-range offsets. */
++  luaJIT_Health health;
++  luaJIT_HealthCoal *health_ring; /* Explicitly armed native diagnostic storage. */
++  uint32_t health_flags;
++  uint64_t health_retired_free, health_reserved;
++#endif
+ } GG_State;
+ 
+ #define GG_OFS(field)	((int)offsetof(GG_State, field))
 diff --git a/src/lj_jit.h b/src/lj_jit.h
-index af50e5c1..bfb64ed4 100644
+index af50e5c1..a1d19d50 100644
 --- a/src/lj_jit.h
 +++ b/src/lj_jit.h
 @@ -9,6 +9,7 @@
@@ -148,19 +166,8 @@ index af50e5c1..bfb64ed4 100644
    MSize szmcode;	/* Size of machine code. */
    MCode *mcode;		/* Start of machine code. */
  #if LJ_ABI_PAUTH
-@@ -517,6 +519,10 @@ typedef struct jit_State {
-   BCLine prev_line;	/* Previous line. */
-   int prof_mode;	/* Profiling mode: 0, 'f', 'l'. */
- #endif
-+  luaJIT_Health health;
-+  luaJIT_HealthCoal *health_ring; /* Explicitly armed native diagnostic storage. */
-+  uint32_t health_flags;
-+  uint64_t health_retired_free, health_reserved;
- } jit_State;
- 
- #ifdef LUA_USE_ASSERT
 diff --git a/src/lj_mcode.c b/src/lj_mcode.c
-index f560a983..ca6e6e0e 100644
+index f560a983..209bd745 100644
 --- a/src/lj_mcode.c
 +++ b/src/lj_mcode.c
 @@ -372,6 +372,8 @@ static void mcode_allocarea(jit_State *J)
@@ -168,7 +175,7 @@ index f560a983..ca6e6e0e 100644
    size_t sz = (size_t)J->param[JIT_P_sizemcode] << 10;
    J->mcarea = (MCode *)mcode_alloc(J, sz);
 +  if (oldarea)
-+    J->health_retired_free += (uint64_t)((char *)J->mctop - (char *)J->mcbot);
++    J2GG(J)->health_retired_free += (uint64_t)((char *)J->mctop - (char *)J->mcbot);
    J->szmcarea = sz;
    J->mcprot = MCPROT_GEN;
    J->mctop = (MCode *)((char *)J->mcarea + J->szmcarea);
@@ -176,7 +183,7 @@ index f560a983..ca6e6e0e 100644
    ((MCLink *)J->mcarea)->size = sz;
    J->szallmcarea += sz;
    J->mcbot = (MCode *)lj_err_register_mcode(J->mcarea, sz, (uint8_t *)J->mcbot);
-+  J->health_reserved += (uint64_t)((char *)J->mctop - (char *)J->mcbot);
++  J2GG(J)->health_reserved += (uint64_t)((char *)J->mctop - (char *)J->mcbot);
  }
  
  /* Free all MCode areas. */
@@ -184,12 +191,12 @@ index f560a983..ca6e6e0e 100644
    MCode *mc = J->mcarea;
    J->mcarea = NULL;
    J->szallmcarea = 0;
-+  J->health_retired_free = J->health_reserved = 0;
++  J2GG(J)->health_retired_free = J2GG(J)->health_reserved = 0;
    while (mc) {
      MCode *next = ((MCLink *)mc)->next;
      size_t sz = ((MCLink *)mc)->size;
 diff --git a/src/lj_trace.c b/src/lj_trace.c
-index 24a1f7e4..8875bb0e 100644
+index 24a1f7e4..ea434e94 100644
 --- a/src/lj_trace.c
 +++ b/src/lj_trace.c
 @@ -7,6 +7,25 @@
@@ -230,15 +237,15 @@ index 24a1f7e4..8875bb0e 100644
 +  uint64_t gap;
 +  if (!L || version != LUAJIT_HEALTH_VERSION || size != sizeof(luaJIT_Health) || !out)
 +    return 0;
-+  J = L2J(L); h = &J->health;
++  J = L2J(L); h = &J2GG(J)->health;
 +  h->version = LUAJIT_HEALTH_VERSION; h->size = sizeof(*h);
 +  h->capabilities = LUAJIT_HEALTH_COUNTERS | LUAJIT_HEALTH_COALESCING | LUAJIT_HEALTH_VMCATEGORY;
 +  memcpy(h->build_id, "a4c064539ea931274d407e1249b4bb575424a0f4+rock-health-1", sizeof("a4c064539ea931274d407e1249b4bb575424a0f4+rock-health-1"));
 +  gap = J->mcarea ? (uint64_t)((char *)J->mctop - (char *)J->mcbot) : 0;
 +  h->arena_bytes = J->szallmcarea;
 +  h->code_current_free_bytes = gap;
-+  h->code_reserved_bytes = J->health_reserved;
-+  h->arena_occupied_bytes = h->arena_bytes - J->health_retired_free - gap;
++  h->code_reserved_bytes = J2GG(J)->health_reserved;
++  h->arena_occupied_bytes = h->arena_bytes - J2GG(J)->health_retired_free - gap;
 +  memcpy(out, h, sizeof(*h));
 +  return 1;
 +}
@@ -248,11 +255,11 @@ index 24a1f7e4..8875bb0e 100644
 +  jit_State *J;
 +  if (!L || version != LUAJIT_HEALTH_VERSION || (flags & ~LUAJIT_HEALTH_COALESCING)) return 0;
 +  J = L2J(L);
-+  if (flags && !J->health_ring) {
-+    J->health_ring = (luaJIT_HealthCoal *)calloc(LUAJIT_HEALTH_RING, sizeof(luaJIT_HealthCoal));
-+    if (!J->health_ring) return 0;
++  if (flags && !J2GG(J)->health_ring) {
++    J2GG(J)->health_ring = (luaJIT_HealthCoal *)calloc(LUAJIT_HEALTH_RING, sizeof(luaJIT_HealthCoal));
++    if (!J2GG(J)->health_ring) return 0;
 +  }
-+  J->health_flags = flags;
++  J2GG(J)->health_flags = flags;
 +  return 1;
 +}
 +
@@ -264,11 +271,11 @@ index 24a1f7e4..8875bb0e 100644
 +  uint32_t n = 0;
 +  if (!L || version != LUAJIT_HEALTH_VERSION || stride != sizeof(luaJIT_HealthCoal) ||
 +      (capacity && !out)) return -1;
-+  J = L2J(L); next = J->health.ring_next;
++  J = L2J(L); next = J2GG(J)->health.ring_next;
 +  oldest = next > LUAJIT_HEALTH_RING ? next - LUAJIT_HEALTH_RING : 0;
 +  seq = first > oldest ? first : oldest;
 +  for (; seq < next && n < capacity; seq++, n++)
-+    memcpy((char *)out+n*stride, &J->health_ring[seq % LUAJIT_HEALTH_RING], stride);
++    memcpy((char *)out+n*stride, &J2GG(J)->health_ring[seq % LUAJIT_HEALTH_RING], stride);
 +  return (int)n;
 +}
 +
@@ -279,11 +286,11 @@ index 24a1f7e4..8875bb0e 100644
    p += szins;
    TRACE_APPENDVEC(snap, nsnap, SnapShot)
    TRACE_APPENDVEC(snapmap, nsnapmap, SnapEntry)
-+  T->health_uid = J->health.root_compiles + J->health.side_compiles + 1;
-+  if (J->parent) J->health.side_compiles++; else J->health.root_compiles++;
-+  J->health.emitted_mcode_bytes += T->szmcode;
-+  J->health.live_traces++;
-+  J->health.live_mcode_bytes += T->szmcode;
++  T->health_uid = J2GG(J)->health.root_compiles + J2GG(J)->health.side_compiles + 1;
++  if (J->parent) J2GG(J)->health.side_compiles++; else J2GG(J)->health.root_compiles++;
++  J2GG(J)->health.emitted_mcode_bytes += T->szmcode;
++  J2GG(J)->health.live_traces++;
++  J2GG(J)->health.live_mcode_bytes += T->szmcode;
    J->cur.traceno = 0;
    J->curfinal = NULL;
    setgcrefp(J->trace[T->traceno], T);
@@ -291,8 +298,8 @@ index 24a1f7e4..8875bb0e 100644
  {
    jit_State *J = G2J(g);
    if (T->traceno) {
-+    J->health.live_traces--;
-+    J->health.live_mcode_bytes -= T->szmcode;
++    J2GG(J)->health.live_traces--;
++    J2GG(J)->health.live_mcode_bytes -= T->szmcode;
      lj_gdbjit_deltrace(J, T);
      if (T->traceno < J->freetrace)
        J->freetrace = T->traceno;
@@ -300,9 +307,9 @@ index 24a1f7e4..8875bb0e 100644
    }
    J->cur.traceno = 0;
    J->freetrace = 0;
-+  J->health.flushes++;
-+  J->health.generation++;
-+  J->health.live_traces = J->health.live_mcode_bytes = 0;
++  J2GG(J)->health.flushes++;
++  J2GG(J)->health.generation++;
++  J2GG(J)->health.live_traces = J2GG(J)->health.live_mcode_bytes = 0;
    /* Clear penalty cache. */
    memset(J->penalty, 0, sizeof(J->penalty));
    /* Free the whole machine code and invalidate all exit stub groups. */
@@ -310,8 +317,8 @@ index 24a1f7e4..8875bb0e 100644
    }
  #endif
    lj_mcode_free(J);
-+  free(J->health_ring);
-+  J->health_ring = NULL;
++  free(J2GG(J)->health_ring);
++  J2GG(J)->health_ring = NULL;
    lj_mem_freevec(g, J->snapmapbuf, J->sizesnapmap, SnapEntry);
    lj_mem_freevec(g, J->snapbuf, J->sizesnap, SnapShot);
    lj_mem_freevec(g, J->irbuf + J->irbotlim, J->irtoplim - J->irbotlim, IRIns);
@@ -319,7 +326,7 @@ index 24a1f7e4..8875bb0e 100644
    J->retryrec = 0;
    J->ktrace = 0;
    setgcref(J->cur.startpt, obj2gco(J->pt));
-+  if (J->parent) J->health.side_starts++; else J->health.root_starts++;
++  if (J->parent) J2GG(J)->health.side_starts++; else J2GG(J)->health.root_starts++;
  
    lj_vmevent_send_(J2G(J), TRACE,
      TValue savetv = J2G(J)->tmptv;
@@ -327,7 +334,7 @@ index 24a1f7e4..8875bb0e 100644
    /* Is there anything to abort? */
    traceno = J->cur.traceno;
    if (traceno) {
-+    if ((uint32_t)e < LUAJIT_HEALTH_REASONS) J->health.aborts[e]++;
++    if ((uint32_t)e < LUAJIT_HEALTH_REASONS) J2GG(J)->health.aborts[e]++;
      J->cur.link = 0;
      J->cur.linktype = LJ_TRLINK_NONE;
      lj_vmevent_send(J2G(J), TRACE,
