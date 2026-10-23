@@ -5,6 +5,7 @@
  */
 #ifndef LUAJIT_HEALTH_H
 #define LUAJIT_HEALTH_H
+#include "lua.h"
 #include <stdint.h>
 #define LUAJIT_HEALTH_VERSION 1
 #define LUAJIT_HEALTH_COUNTERS 1
@@ -50,7 +51,8 @@ typedef struct luaJIT_HealthCoal {
   uint64_t start_proto, failure_proto;
   uint64_t allow_gpr, allow_fpr, free_gpr, free_fpr, live_gpr, live_fpr;
   uint32_t parent, exitno, subreason, start_pc, failure_pc;
-  uint32_t framedepth, baseslot, maxslot, snapshot, snapshot_entries;
+  int32_t framedepth;
+  uint32_t baseslot, maxslot, snapshot, snapshot_entries;
   uint32_t snapshot_slots, inherited, failed_ref, failed_slot;
   uint32_t failed_type, parent_regsp, target_reg, target_spill;
   uint32_t slot_count, slots_truncated;

@@ -47,6 +47,7 @@ build_slice() {
   # slice's objects and silently produces a duplicate of it. Nuke everything
   # untracked instead -- luajit is a pinned submodule, so this is safe.
   git -C luajit clean -xfdq
+  ./apply-luajit-patches.sh
   make -C luajit -j"$(sysctl -n hw.ncpu)" amalg \
     CC=clang \
     HOST_CC=clang \
@@ -58,6 +59,7 @@ build_slice() {
   cp luajit/src/libluajit.a "$prefix/lib/"
   cp luajit/src/lua.h luajit/src/lauxlib.h luajit/src/lualib.h \
      luajit/src/luaconf.h luajit/src/luajit.h luajit/src/lua.hpp \
+     luajit/src/luajit-health.h \
      "$prefix/include/luajit-2.1/"
 
   # A slice must be the platform it claims: a stale-object reuse silently
