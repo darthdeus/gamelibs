@@ -89,15 +89,6 @@ jobs:
         LUAJIT_PATCH_HASH=$(file_hash patches/luajit-health.patch luajit-health.h apply-luajit-patches.sh)
         echo "luajit-hash=${CACHE_VERSION}-${LUAJIT_HASH}-${LUAJIT_PATCH_HASH}${CACHE_SUFFIX}" >> $GITHUB_OUTPUT
 
-        # libmpv+FFmpeg: build_mpv.py embeds the pinned FFmpeg/mpv/mpv-build
-        # refs, so hashing the script alone captures any pin bump. ffmpeg+mpv
-        # compile is ~10-30min on a runner -- caching the staged output is
-        # mandatory. NB: git hash-object, NOT sha256sum -- portable across
-        # runners (macOS lacks sha256sum; that gap once shipped a stale mac
-        # build for two releases).
-        MPV_HASH=$(git hash-object build_mpv.py)
-        echo "mpv-hash=${CACHE_VERSION}-${MPV_HASH}${CACHE_SUFFIX}" >> $GITHUB_OUTPUT
-
     - name: Cache SDL2 build
       id: cache-sdl2
       uses: actions/cache@v4
@@ -163,19 +154,7 @@ jobs:
           libdecor-0-dev
           libdrm-dev
           libgbm-dev
-          libpng-dev
           zlib1g-dev
-          libbz2-dev
-          nasm
-          autoconf
-          automake
-          libtool-bin
-          patchelf
-          libgnutls28-dev
-          python3-pip
-          libfribidi-dev
-          libfontconfig1-dev
-          libharfbuzz-dev
         version: 1.0
     
     - name: Initialize submodules
@@ -306,52 +285,6 @@ jobs:
     - name: Test LuaJIT native health ABI
       run: ./tests/test-luajit-health.sh "$PWD/prebuilt/linux/x86_64"
 
-    - name: Cache libmpv+FFmpeg build
-      id: cache-mpv
-      # Skip the cache on tag builds: a cache HIT restores only the
-      # globbed paths, never the recursively-vendored font/codec libs
-      # (libfontconfig.so.* etc. -- arbitrary sonames), so the release
-      # zip would ship libmpv without its bundled deps (Bug 3). Tag
-      # builds always full-rebuild -> complete, self-contained bundle.
-      if: ${{ !startsWith(github.ref, 'refs/tags/') }}
-      uses: actions/cache@v4
-      with:
-        path: |
-          prebuilt/linux/x86_64/lib/libmpv*
-          prebuilt/linux/x86_64/lib/libav*
-          prebuilt/linux/x86_64/lib/libsw*
-          prebuilt/linux/x86_64/lib/libpostproc*
-          prebuilt/linux/x86_64/lib/pkgconfig/mpv.pc
-          prebuilt/linux/x86_64/lib/pkgconfig/libav*
-          prebuilt/linux/x86_64/lib/pkgconfig/libsw*
-          prebuilt/linux/x86_64/lib/pkgconfig/libpostproc*
-          prebuilt/linux/x86_64/lib/pkgconfig/libplacebo.pc
-          prebuilt/linux/x86_64/lib/pkgconfig/libass.pc
-          prebuilt/linux/x86_64/include/mpv
-          prebuilt/linux/x86_64/include/libav*
-          prebuilt/linux/x86_64/include/libsw*
-          prebuilt/linux/x86_64/include/libpostproc*
-        key: mpv-ubuntu-${{ steps.cache-keys.outputs.mpv-hash }}
-
-    - name: Build libmpv+FFmpeg
-      if: steps.cache-mpv.outputs.cache-hit != 'true'
-      run: |
-        # mpv 0.40 needs a newer meson/ninja than Ubuntu 22.04 apt
-        # ships; pip is the reproducible source.
-        pip3 install --user 'meson>=1.3' ninja
-        export PATH="$HOME/.local/bin:$PATH"
-        python3 build_mpv.py
-        echo "libmpv+FFmpeg built (pinned, version-consistent)"
-
-    - name: libmpv cache status
-      run: |
-        if [ "${{ steps.cache-mpv.outputs.cache-hit }}" = "true" ]; then
-          echo "✓ libmpv+FFmpeg restored from cache"
-        else
-          echo "✓ libmpv+FFmpeg built from source"
-        fi
-        ls -la prebuilt/linux/x86_64/lib/libmpv* prebuilt/linux/x86_64/lib/libav* 2>/dev/null || true
-
     - name: Create library info file
       run: |
         cat > prebuilt/linux/x86_64/library_info.txt << EOF
@@ -363,7 +296,6 @@ jobs:
         - FreeType Version: 2.14.1
         - cimgui (Dear ImGui C wrapper) with SDL2/OpenGL3 backends
         - LuaJIT 2.1 - Just-In-Time Compiler for Lua
-        - libmpv v0.40.0 + FFmpeg n7.1.1 - playback (libmpv) + screen capture (libavdevice); libass/libplacebo static
         
         Libraries:
         $(ls -la prebuilt/linux/x86_64/lib/)
@@ -382,6 +314,7 @@ jobs:
     
     - name: Create release archive
       run: |
+        python3 copy_licenses.py desktop prebuilt/linux/x86_64
         cd prebuilt/linux/x86_64
         zip -ry ../../../gamelibs-linux-x86_64.zip .
         cd ../../..
@@ -459,11 +392,6 @@ jobs:
         LUAJIT_HASH=$(git rev-parse HEAD:luajit)
         LUAJIT_PATCH_HASH=$(file_hash patches/luajit-health.patch luajit-health.h apply-luajit-patches.sh)
         echo "luajit-hash=${CACHE_VERSION}-${LUAJIT_HASH}-${LUAJIT_PATCH_HASH}${CACHE_SUFFIX}" >> $GITHUB_OUTPUT
-
-        # libmpv+FFmpeg: git hash-object build_mpv.py (embeds the pinned
-        # refs; portable across runners, macOS lacks sha256sum).
-        MPV_HASH=$(git hash-object build_mpv.py)
-        echo "mpv-hash=${CACHE_VERSION}-${MPV_HASH}${CACHE_SUFFIX}" >> $GITHUB_OUTPUT
 
     - name: Cache SDL2 build
       id: cache-sdl2
@@ -651,113 +579,6 @@ jobs:
         ls -la prebuilt/windows/x86_64/lib/lua51* || true
         ls -la prebuilt/windows/x86_64/bin/lua* || true
 
-    - name: Cache libmpv+FFmpeg build
-      id: cache-mpv
-      # See the ubuntu job: skip on tag builds so releases full-rebuild
-      # and ship the recursively-vendored mingw font DLLs (Bug 3).
-      if: ${{ !startsWith(github.ref, 'refs/tags/') }}
-      uses: actions/cache@v4
-      with:
-        # Targeted globs (not the whole bin/ or pkgconfig/ -- those are
-        # shared with SDL2/etc. built in the same job; a whole-dir
-        # cache under the mpv key would restore stale sibling libs).
-        # Recursively-vendored mingw font DLLs are intentionally NOT
-        # cached: they have arbitrary sonames and are only needed in
-        # shipped (tag) bundles, which skip the cache and full-rebuild.
-        path: |
-          prebuilt/windows/x86_64/bin/mpv*.dll
-          prebuilt/windows/x86_64/bin/libmpv*.dll
-          prebuilt/windows/x86_64/bin/av*.dll
-          prebuilt/windows/x86_64/bin/sw*.dll
-          prebuilt/windows/x86_64/bin/postproc*.dll
-          prebuilt/windows/x86_64/lib/libmpv*
-          prebuilt/windows/x86_64/lib/libav*
-          prebuilt/windows/x86_64/lib/libsw*
-          prebuilt/windows/x86_64/lib/libpostproc*
-          prebuilt/windows/x86_64/lib/pkgconfig/mpv.pc
-          prebuilt/windows/x86_64/lib/pkgconfig/libav*
-          prebuilt/windows/x86_64/lib/pkgconfig/libsw*
-          prebuilt/windows/x86_64/lib/pkgconfig/libpostproc*
-          prebuilt/windows/x86_64/lib/pkgconfig/libplacebo.pc
-          prebuilt/windows/x86_64/lib/pkgconfig/libass.pc
-          prebuilt/windows/x86_64/include/mpv
-          prebuilt/windows/x86_64/include/libav*
-          prebuilt/windows/x86_64/include/libsw*
-          prebuilt/windows/x86_64/include/libpostproc*
-        key: mpv-windows-x86_64-${{ steps.cache-keys.outputs.mpv-hash }}
-
-    - name: Setup MSYS2 (libmpv+FFmpeg toolchain)
-      if: steps.cache-mpv.outputs.cache-hit != 'true'
-      uses: msys2/setup-msys2@v2
-      with:
-        msystem: MINGW64
-        update: true
-        # mpv-build compiles ffmpeg + libass + libplacebo + mpv from
-        # our pinned sources; these are its toolchain + the libass/
-        # libplacebo dependencies (same role as the ubuntu apt /
-        # macos brew sets, in mingw-w64 form).
-        install: >-
-          git diffutils
-          autoconf
-          automake
-          libtool
-          make
-          gettext
-          gettext-devel
-          pkgconf
-          mingw-w64-x86_64-toolchain
-          mingw-w64-x86_64-meson
-          mingw-w64-x86_64-ninja
-          mingw-w64-x86_64-nasm
-          mingw-w64-x86_64-pkgconf
-          mingw-w64-x86_64-gnutls
-          mingw-w64-x86_64-python
-          mingw-w64-x86_64-fribidi
-          mingw-w64-x86_64-harfbuzz
-          mingw-w64-x86_64-freetype
-          mingw-w64-x86_64-fontconfig
-          mingw-w64-x86_64-libpng
-          mingw-w64-x86_64-libjpeg-turbo
-          mingw-w64-x86_64-lcms2
-          mingw-w64-x86_64-vulkan-headers
-          mingw-w64-x86_64-vulkan-loader
-
-    - name: Build libmpv+FFmpeg
-      if: steps.cache-mpv.outputs.cache-hit != 'true'
-      shell: msys2 {0}
-      run: |
-        # Self-built, version-consistent libmpv + shared FFmpeg under
-        # the MSYS2 MINGW64 toolchain (no third-party prebuilts). libass
-        # is built with Meson here (build_mpv.py, Windows path) instead
-        # of mpv-build's autotools step: libass autogen.sh -> aclocal
-        # hits an unfixable msys2 path-canonicalization bug (six prior
-        # shim rounds). Meson never invokes aclocal, removing the whole
-        # failure class. No aclocal/autotools env shims needed anymore.
-        #
-        # Clear the inherited PKG_CONFIG_PATH. actions/setup-python sets
-        # it to C:\hostedtoolcache\...\lib/pkgconfig (a Windows path
-        # with a drive colon). mpv-build's *-config scripts APPEND
-        # $BUILD/build_libs/lib/pkgconfig to it with a POSIX ':'
-        # separator; the inherited 'C:' colon then makes the list
-        # unparseable to pkgconf, so mpv can't find the libav*.pc that
-        # ffmpeg installed into build_libs -> "Dependency libavcodec
-        # not found". Empty -> mpv-build's scripts use just the clean
-        # msys build_libs path; mingw deps come from pkgconf's built-in
-        # /mingw64 dir regardless.
-        unset PKG_CONFIG_PATH
-        python build_mpv.py
-        echo "libmpv+FFmpeg built (pinned, version-consistent, mingw)"
-
-    - name: libmpv cache status
-      shell: bash
-      run: |
-        if [ "${{ steps.cache-mpv.outputs.cache-hit }}" = "true" ]; then
-          echo "✓ libmpv+FFmpeg restored from cache"
-        else
-          echo "✓ libmpv+FFmpeg built from source"
-        fi
-        ls -la prebuilt/windows/x86_64/bin/*mpv*.dll prebuilt/windows/x86_64/bin/av*.dll 2>/dev/null || true
-
     - name: Create library info file
       shell: bash
       run: |
@@ -770,7 +591,6 @@ jobs:
         - FreeType Version: 2.14.1
         - cimgui (Dear ImGui C wrapper) with SDL2/OpenGL3 backends
         - LuaJIT 2.1 - Just-In-Time Compiler for Lua
-        - libmpv v0.40.0 + FFmpeg n7.1.1 - playback (libmpv) + screen capture (libavdevice); libass/libplacebo static
         
         Libraries:
         $(ls -la prebuilt/windows/x86_64/lib/)
@@ -794,6 +614,7 @@ jobs:
     - name: Create release archive
       shell: bash
       run: |
+        python3 copy_licenses.py desktop prebuilt/windows/x86_64
         cd prebuilt/windows/x86_64
         7z a -tzip ../../../gamelibs-windows-x86_64.zip *
         cd ../../..
@@ -813,10 +634,8 @@ jobs:
     # macos-15 is the image v0.6.6 built green on.
     runs-on: macos-15
     name: Build macOS ARM64
-    # Explicit macOS floor for everything built here (cmake, clang, LuaJIT's
-    # make, meson). Unset, it floats with the runner image. 15.0 matches the
-    # vendored Homebrew bottles behind libmpv, and rock's
-    # MACOSX_DEPLOYMENT_TARGET must match it.
+    # Pin the deployment floor for every artifact; unset, it floats with the
+    # runner image. Consumers must use a matching MACOSX_DEPLOYMENT_TARGET.
     env:
       MACOSX_DEPLOYMENT_TARGET: "15.0"
     
@@ -877,15 +696,9 @@ jobs:
         LUAJIT_PATCH_HASH=$(file_hash patches/luajit-health.patch luajit-health.h apply-luajit-patches.sh)
         echo "luajit-hash=${CACHE_VERSION}-${LUAJIT_HASH}-${LUAJIT_PATCH_HASH}${CACHE_SUFFIX}" >> $GITHUB_OUTPUT
 
-        # libmpv+FFmpeg: git hash-object build_mpv.py (embeds the pinned
-        # refs; portable across runners).
-        MPV_HASH=$(git hash-object build_mpv.py)
-        echo "mpv-hash=${CACHE_VERSION}-${MPV_HASH}${CACHE_SUFFIX}" >> $GITHUB_OUTPUT
-
     - name: Setup build environment
       run: |
-        brew install cmake ninja pkg-config meson nasm \
-          autoconf automake libtool fribidi fontconfig harfbuzz
+        brew install cmake ninja pkg-config
         echo "Build environment ready"
     
     - name: Create build directories
@@ -1028,47 +841,6 @@ jobs:
         fi
         ls -la prebuilt/macos/arm64/lib/libluajit* || true
 
-    - name: Cache libmpv+FFmpeg build
-      id: cache-mpv
-      # See the ubuntu job: skip on tag builds so releases full-rebuild
-      # and ship the recursively-vendored Homebrew dylibs (Bug 3 -- the
-      # original symptom: run 25960133197's macOS cache HIT shipped a
-      # bundle with zero .pc and partial libav*).
-      if: ${{ !startsWith(github.ref, 'refs/tags/') }}
-      uses: actions/cache@v4
-      with:
-        path: |
-          prebuilt/macos/arm64/lib/libmpv*
-          prebuilt/macos/arm64/lib/libav*
-          prebuilt/macos/arm64/lib/libsw*
-          prebuilt/macos/arm64/lib/libpostproc*
-          prebuilt/macos/arm64/lib/pkgconfig/mpv.pc
-          prebuilt/macos/arm64/lib/pkgconfig/libav*
-          prebuilt/macos/arm64/lib/pkgconfig/libsw*
-          prebuilt/macos/arm64/lib/pkgconfig/libpostproc*
-          prebuilt/macos/arm64/lib/pkgconfig/libplacebo.pc
-          prebuilt/macos/arm64/lib/pkgconfig/libass.pc
-          prebuilt/macos/arm64/include/mpv
-          prebuilt/macos/arm64/include/libav*
-          prebuilt/macos/arm64/include/libsw*
-          prebuilt/macos/arm64/include/libpostproc*
-        key: mpv-macos-arm64-${{ steps.cache-keys.outputs.mpv-hash }}
-
-    - name: Build libmpv+FFmpeg
-      if: steps.cache-mpv.outputs.cache-hit != 'true'
-      run: |
-        python3 build_mpv.py
-        echo "libmpv+FFmpeg built (pinned, version-consistent)"
-
-    - name: libmpv cache status
-      run: |
-        if [ "${{ steps.cache-mpv.outputs.cache-hit }}" = "true" ]; then
-          echo "✓ libmpv+FFmpeg restored from cache"
-        else
-          echo "✓ libmpv+FFmpeg built from source"
-        fi
-        ls -la prebuilt/macos/arm64/lib/libmpv* prebuilt/macos/arm64/lib/libav* 2>/dev/null || true
-
     - name: Create library info file
       run: |
         cat > prebuilt/macos/arm64/library_info.txt << EOF
@@ -1081,7 +853,6 @@ jobs:
         - FreeType Version: 2.14.1
         - cimgui (Dear ImGui C wrapper) with SDL2/OpenGL3 backends
         - LuaJIT Version: 2.1
-        - libmpv v0.40.0 + FFmpeg n7.1.1 - playback (libmpv) + screen capture (libavdevice); libass/libplacebo static
         
         Library files:
         EOF
@@ -1097,9 +868,6 @@ jobs:
         echo "" >> prebuilt/macos/arm64/library_info.txt
         echo "=== LuaJIT ===" >> prebuilt/macos/arm64/library_info.txt
         ls -la prebuilt/macos/arm64/lib/libluajit* >> prebuilt/macos/arm64/library_info.txt
-        echo "" >> prebuilt/macos/arm64/library_info.txt
-        echo "=== libmpv + FFmpeg (mpv v0.40.0 / FFmpeg n7.1.1) ===" >> prebuilt/macos/arm64/library_info.txt
-        ls -la prebuilt/macos/arm64/lib/libmpv* prebuilt/macos/arm64/lib/libav* prebuilt/macos/arm64/lib/libsw* prebuilt/macos/arm64/lib/libpostproc* >> prebuilt/macos/arm64/library_info.txt
 
     - name: List built libraries
       run: |
@@ -1111,6 +879,7 @@ jobs:
     
     - name: Create release archive
       run: |
+        python3 copy_licenses.py desktop prebuilt/macos/arm64
         cd prebuilt/macos/arm64
         zip -ry ../../../gamelibs-macos-arm64.zip *
         cd ../../..
@@ -1136,6 +905,7 @@ jobs:
     - name: Create release archives
       run: |
         for slice in arm64 arm64-sim; do
+          python3 copy_licenses.py ios "prebuilt/ios/$slice"
           (cd "prebuilt/ios/$slice" && zip -ry "../../../gamelibs-ios-$slice.zip" .)
         done
 
@@ -1173,8 +943,9 @@ jobs:
 
     - name: Create release archive
       run: |
+        python3 copy_licenses.py bindings prebuilt/lua
         cd prebuilt/lua
-        zip -r ../../gamelibs-lua-bindings.zip cimgui
+        zip -r ../../gamelibs-lua-bindings.zip cimgui licenses
         cd ../..
         echo "Archive created: $(ls -lh gamelibs-lua-bindings.zip)"
 
@@ -1231,10 +1002,6 @@ jobs:
         - **FreeType** v2.14.1 - Font rendering library
         - **cimgui** - Dear ImGui C wrapper with SDL2/OpenGL3 backends
         - **LuaJIT** 2.1 - Just-In-Time Compiler for Lua
-        - **libmpv + FFmpeg** (mpv v0.40.0 / FFmpeg n7.1.1) - media playback +
-          screen capture, self-built and version-consistent by construction
-          on all three platforms (mac/linux dynamic shared; Windows mingw
-          shared via MSYS2). No third-party prebuilts.
         
         ### Platform Builds
         - **Linux x86_64** (\`gamelibs-linux-x86_64.zip\`)
