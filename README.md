@@ -3,8 +3,8 @@
 Prebuilt native libraries for games, built from pinned sources by GitHub
 Actions and published as release zips. Rock's
 engine links them, but nothing here is Rock-specific: each zip is an
-ordinary install prefix with `include/`, `lib/` (`bin/` on Windows) and
-`pkg-config` files.
+ordinary install prefix with `include/`, `lib/` (`bin/` on Windows),
+`pkg-config` files and upstream notices under `licenses/`.
 
 ## Libraries
 
@@ -15,13 +15,6 @@ ordinary install prefix with `include/`, `lib/` (`bin/` on Windows) and
 | LuaJIT | submodule `luajit` | MIT | |
 | cimgui + Dear ImGui | submodule `cimgui` | MIT | one `cimgui_complete` library with the SDL2 and OpenGL3 backends |
 | Lua bindings for cimgui | generated (`cimgui_love_generator`) | MIT | `gamelibs-lua-bindings.zip` |
-| libmpv + FFmpeg | mpv v0.40.0, FFmpeg n7.1.1 | **GPL-2.0-or-later** as built | FFmpeg is configured with `--enable-gpl` and libx264; see [docs/build-mpv.md](docs/build-mpv.md) |
-
-The libmpv and FFmpeg build also bundles its runtime dependencies (for
-example fontconfig, HarfBuzz, FriBidi, GnuTLS, GMP and Nettle on some
-platforms), each under its own licence. Today the media stack ships in
-the same zip as the core libraries; it is being moved to a separate
-download so the core zip contains only permissively licensed code.
 
 ## Platforms
 
@@ -44,10 +37,10 @@ relative install names (`@rpath` on macOS, `$ORIGIN` on Linux) and the
 ## Building
 
 `make build` builds SDL2, FreeType, cimgui and LuaJIT locally on Linux
-(`build_local.sh`). The full matrix, including libmpv and FFmpeg
-(`build_mpv.py`), runs in `.github/workflows/build-libraries.yml` on
-every push and pull request. Pushing a `v*` tag builds and publishes a
-release; `make release` bumps the version and tags it.
+(`build_local.sh`). The workflow builds desktop and iOS libraries and Lua
+bindings on every push and pull request.
+Pushing a `v*` tag builds and publishes a release; `make release` bumps the
+version and tags it.
 
 Clone with submodules: `git clone --recursive`.
 
