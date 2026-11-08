@@ -6,7 +6,7 @@ LUAJIT_DIR="$ROOT_DIR/luajit"
 PATCH_FILE="$ROOT_DIR/patches/luajit-health.patch"
 HEADER_FILE="$ROOT_DIR/luajit-health.h"
 HEADER_DEST="$LUAJIT_DIR/src/luajit-health.h"
-EXPECTED_COMMIT=a4c064539ea931274d407e1249b4bb575424a0f4
+EXPECTED_COMMIT=c5a2fa4df71eb5ee9c71bc7b32bb5630d18568d7
 
 die() {
   printf 'apply-luajit-patches: %s\n' "$1" >&2

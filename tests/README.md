@@ -8,7 +8,7 @@ make -C luajit install PREFIX="$PWD/prebuilt/linux/x86_64"
 ```
 
 The public contract is `luajit-health.h`, installed beside `luajit.h`.
-The source remains pinned to upstream a4c064539ea931274d407e1249b4bb575424a0f4.
+The source remains pinned to upstream c5a2fa4df71eb5ee9c71bc7b32bb5630d18568d7.
 `patches/luajit-health.patch` carries the gamelibs changes. Local and CI LuaJIT
 builds apply it; CI keys include the patch, header and applicator. This does
 not publish a release. Rock's v0.6.11 binary does not have the capability.
