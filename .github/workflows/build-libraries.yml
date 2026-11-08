@@ -537,7 +537,8 @@ jobs:
           prebuilt/windows/x86_64/bin/lua51*
           prebuilt/windows/x86_64/bin/luajit*
           prebuilt/windows/x86_64/include/lua*
-        key: luajit-windows-${{ steps.cache-keys.outputs.luajit-hash }}
+          prebuilt/windows/x86_64/share/luajit*
+        key: luajit-windows-vmdef-${{ steps.cache-keys.outputs.luajit-hash }}
 
     - name: Apply LuaJIT health patch (Windows)
       if: steps.cache-luajit.outputs.cache-hit != 'true'
@@ -555,6 +556,10 @@ jobs:
         rem debug /MDd token into /MTd. Only lines 21-22 contain /MD.
         powershell -Command "(Get-Content msvcbuild.bat) -replace '/MD','/MT' | Set-Content msvcbuild.bat"
         call msvcbuild.bat
+        if errorlevel 1 exit /b 1
+        mkdir ..\..\prebuilt\windows\x86_64\share\luajit-2.1\jit
+        copy jit\vmdef.lua ..\..\prebuilt\windows\x86_64\share\luajit-2.1\jit\vmdef.lua
+        if errorlevel 1 exit /b 1
         xcopy luajit.exe ..\..\prebuilt\windows\x86_64\bin\ /Y
         xcopy lua51.dll ..\..\prebuilt\windows\x86_64\bin\ /Y
         xcopy lua51.lib ..\..\prebuilt\windows\x86_64\lib\ /Y
@@ -567,6 +572,12 @@ jobs:
         xcopy lua.hpp ..\..\prebuilt\windows\x86_64\include\ /Y
         cd ..\..
         echo LuaJIT built and installed
+
+    - name: Validate Windows LuaJIT metadata
+      shell: cmd
+      run: |
+        set LUA_PATH=%cd%\prebuilt\windows\x86_64\share\luajit-2.1\?.lua
+        prebuilt\windows\x86_64\bin\luajit.exe -e "local v = require('jit.vmdef'); assert(v.bcnames and v.traceerr and v.ffnames)"
     
     - name: LuaJIT cache status
       shell: bash
