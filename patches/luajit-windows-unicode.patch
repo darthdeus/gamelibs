@@ -1,8 +1,19 @@
 diff --git a/src/lib_package.c b/src/lib_package.c
-index daaa4104..2ac1fb3d 100644
+index daaa4104..24149a6c 100644
 --- a/src/lib_package.c
 +++ b/src/lib_package.c
-@@ -76,35 +76,62 @@ static const char *ll_bcsym(void *lib, const char *sym)
+@@ -70,41 +70,73 @@ static const char *ll_bcsym(void *lib, const char *sym)
+ #define WIN32_LEAN_AND_MEAN
+ #include <windows.h>
+ 
++/* LuaJIT declares an older SDK target; our Windows runtime requires Vista+. */
++#ifndef WC_ERR_INVALID_CHARS
++#define WC_ERR_INVALID_CHARS 0x00000080
++#endif
++
+ #ifndef GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS
+ #define GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS  4
+ #define GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT  2
  BOOL WINAPI GetModuleHandleExA(DWORD, LPCSTR, HMODULE*);
  #endif
  
