@@ -20,14 +20,17 @@ die() {
 actual_commit=$(git -C "$LUAJIT_DIR" rev-parse --verify HEAD 2>/dev/null) || die "cannot read LuaJIT submodule HEAD"
 [[ "$actual_commit" == "$EXPECTED_COMMIT" ]] || die "expected LuaJIT $EXPECTED_COMMIT, found $actual_commit"
 
-if git -C "$LUAJIT_DIR" apply --reverse --check "$PATCH_FILE" >/dev/null 2>&1; then
-  printf 'LuaJIT health patch already applied.\n'
-elif git -C "$LUAJIT_DIR" apply --check "$PATCH_FILE" >/dev/null 2>&1; then
-  git -C "$LUAJIT_DIR" apply "$PATCH_FILE"
-  printf 'Applied LuaJIT health patch.\n'
-else
-  die "patch is neither cleanly applicable nor already applied; inspect the LuaJIT worktree"
-fi
+for patch_file in "$PATCH_FILE" "$ROOT_DIR/patches/luajit-windows-unicode.patch"; do
+  [[ -f "$patch_file" ]] || die "required patch is missing: $patch_file"
+  if git -C "$LUAJIT_DIR" apply --reverse --check "$patch_file" >/dev/null 2>&1; then
+    printf 'Already applied: %s\n' "$patch_file"
+  elif git -C "$LUAJIT_DIR" apply --check "$patch_file" >/dev/null 2>&1; then
+    git -C "$LUAJIT_DIR" apply "$patch_file"
+    printf 'Applied: %s\n' "$patch_file"
+  else
+    die "patch is neither cleanly applicable nor already applied: $patch_file"
+  fi
+done
 
 if [[ -e "$HEADER_DEST" ]]; then
   cmp -s "$HEADER_FILE" "$HEADER_DEST" || die "existing LuaJIT header differs from $HEADER_FILE: $HEADER_DEST"
