@@ -20,7 +20,7 @@ __declspec(dllexport) int luaopen_unicode_fixture(lua_State *L) {
 '@ | Set-Content -Encoding ascii "$work/source/fixture.c"
     Push-Location "$work/source"
     try {
-        Checked { cl /nologo /LD /MT dep.c /link /out:unicode_dep.dll }
+        Checked { cl /nologo /LD /MT dep.c /link /out:unicode_dep.dll /implib:unicode_dep.lib }
         Checked { cl /nologo /LD /MT "/I$Prefix/include" fixture.c /link "/libpath:$Prefix/lib" lua51.lib unicode_dep.lib /out:unicode_fixture.dll }
     } finally { Pop-Location }
     @'
