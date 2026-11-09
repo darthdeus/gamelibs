@@ -1,12 +1,12 @@
 diff --git a/src/lib_package.c b/src/lib_package.c
-index daaa4104..24149a6c 100644
+index daaa4104..15f722c0 100644
 --- a/src/lib_package.c
 +++ b/src/lib_package.c
-@@ -70,41 +70,73 @@ static const char *ll_bcsym(void *lib, const char *sym)
+@@ -70,41 +70,76 @@ static const char *ll_bcsym(void *lib, const char *sym)
  #define WIN32_LEAN_AND_MEAN
  #include <windows.h>
  
-+/* LuaJIT declares an older SDK target; our Windows runtime requires Vista+. */
++/* Strict conversion flag hidden by LuaJIT's older SDK target. */
 +#ifndef WC_ERR_INVALID_CHARS
 +#define WC_ERR_INVALID_CHARS 0x00000080
 +#endif
@@ -17,13 +17,21 @@ index daaa4104..24149a6c 100644
  BOOL WINAPI GetModuleHandleExA(DWORD, LPCSTR, HMODULE*);
  #endif
  
+-#if LJ_TARGET_UWP
+-void *LJ_WIN_LOADLIBA(const char *path)
 +/* Runtime paths are UTF-8, independent of the process ANSI code page. */
 +void *lj_win_loadlib(const char *path)
-+{
+ {
+-  DWORD err = GetLastError();
+-  wchar_t wpath[256];
+-  HANDLE lib = NULL;
+-  if (MultiByteToWideChar(CP_ACP, 0, path, -1, wpath, 256) > 0) {
+-    lib = LoadPackagedLibrary(wpath, 0);
 +  int count = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, path, -1, NULL, 0);
 +  wchar_t *wide;
 +  HMODULE lib;
 +  DWORD err;
++  int i;
 +  if (!count) return NULL;
 +  wide = (wchar_t *)malloc((size_t)count * sizeof(wchar_t));
 +  if (!wide) { SetLastError(ERROR_NOT_ENOUGH_MEMORY); return NULL; }
@@ -32,15 +40,10 @@ index daaa4104..24149a6c 100644
 +    free(wide);
 +    SetLastError(err);
 +    return NULL;
-+  }
- #if LJ_TARGET_UWP
--void *LJ_WIN_LOADLIBA(const char *path)
--{
--  DWORD err = GetLastError();
--  wchar_t wpath[256];
--  HANDLE lib = NULL;
--  if (MultiByteToWideChar(CP_ACP, 0, path, -1, wpath, 256) > 0) {
--    lib = LoadPackagedLibrary(wpath, 0);
+   }
++  /* The Windows loader requires backslashes, including for dependency search. */
++  for (i = 0; i < count; i++) if (wide[i] == L'/') wide[i] = L'\\';
++#if LJ_TARGET_UWP
 +  lib = LoadPackagedLibrary(wide, 0);
 +#else
 +  {
@@ -50,7 +53,7 @@ index daaa4104..24149a6c 100644
 +        (count > 2 && wide[0] == L'\\' && wide[1] == L'\\'))
 +      flags |= LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR;
 +    lib = LoadLibraryExW(wide, NULL, flags);
-   }
++  }
 +#endif
 +  err = GetLastError();
 +  free(wide);
