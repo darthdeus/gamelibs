@@ -1,3 +1,63 @@
+diff --git a/src/lib_os.c b/src/lib_os.c
+index 93c6a5f1..23066e1b 100644
+--- a/src/lib_os.c
++++ b/src/lib_os.c
+@@ -33,6 +33,14 @@
+ #include <locale.h>
+ #endif
+ 
++#if LJ_TARGET_WINDOWS
++#define WIN32_LEAN_AND_MEAN
++#include <windows.h>
++#ifndef WC_ERR_INVALID_CHARS
++#define WC_ERR_INVALID_CHARS 0x00000080
++#endif
++#endif
++
+ /* ------------------------------------------------------------------------ */
+ 
+ #define LJLIB_MODULE_os
+@@ -103,6 +111,40 @@ LJLIB_CF(os_getenv)
+ {
+ #if LJ_TARGET_CONSOLE
+   lua_pushnil(L);
++#elif LJ_TARGET_WINDOWS
++  const char *name = luaL_checkstring(L, 1);
++  wchar_t namebuf[128], valuebuf[256];
++  wchar_t *wname = namebuf, *value = valuebuf;
++  DWORD capacity = 256, length, err;
++  int count = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, name, -1, NULL, 0);
++  int bytes;
++  char *utf8;
++  if (!count) return luaL_error(L, "environment name is not valid UTF-8");
++  if (count > 128) wname = (wchar_t *)lua_newuserdata(L, (size_t)count * sizeof(wchar_t));
++  if (!MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, name, -1, wname, count))
++    return luaL_error(L, "unable to decode environment name");
++  /* Small reads need no temporary GC allocations. Retry if the value grows. */
++  for (;;) {
++    SetLastError(0);
++    length = GetEnvironmentVariableW(wname, value, capacity);
++    if (!length) {
++      err = GetLastError();
++      if (err == ERROR_ENVVAR_NOT_FOUND) lua_pushnil(L);
++      else if (!err) lua_pushliteral(L, "");
++      else return luaL_error(L, "unable to read environment variable (Windows error %d)", (int)err);
++      return 1;
++    }
++    if (length < capacity) break;
++    if (value != valuebuf) lua_pop(L, 1);
++    capacity = length;
++    value = (wchar_t *)lua_newuserdata(L, (size_t)capacity * sizeof(wchar_t));
++  }
++  bytes = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, value, length, NULL, 0, NULL, NULL);
++  if (!bytes) return luaL_error(L, "environment value is not valid Unicode");
++  utf8 = lj_buf_tmp(L, (MSize)bytes);
++  if (!WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, value, length, utf8, bytes, NULL, NULL))
++    return luaL_error(L, "unable to encode environment value as UTF-8");
++  lua_pushlstring(L, utf8, (size_t)bytes);
+ #else
+   lua_pushstring(L, getenv(luaL_checkstring(L, 1)));  /* if NULL push nil */
+ #endif
 diff --git a/src/lib_package.c b/src/lib_package.c
 index daaa4104..ba513a89 100644
 --- a/src/lib_package.c

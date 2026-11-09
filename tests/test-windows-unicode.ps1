@@ -1,5 +1,6 @@
 param([Parameter(Mandatory=$true)][string]$Prefix)
 $ErrorActionPreference = 'Stop'
+$previousPath = $env:LUAJIT_UNICODE_PATH
 $Prefix = (Resolve-Path $Prefix).Path
 $work = Join-Path ([IO.Path]::GetTempPath()) ('luajit-unicode-' + [guid]::NewGuid())
 New-Item -ItemType Directory "$work/bin", "$work/source", "$work/unrelated" | Out-Null
@@ -42,6 +43,7 @@ __declspec(dllexport) int luaopen_unicode_fixture(lua_State *L) {
         New-Item -ItemType Directory $directory | Out-Null
         Copy-Item "$work/source/unicode_*.dll" $directory
         $path = (Join-Path $directory 'unicode_fixture.dll').Replace('\','/')
+        $env:LUAJIT_UNICODE_PATH = $path
         $encoded = ([Text.Encoding]::UTF8.GetBytes($path) | ForEach-Object { '\' + $_.ToString('000') }) -join ''
         @"
 local ffi = require('ffi')
@@ -50,6 +52,28 @@ local acp = tonumber(ffi.C.GetACP())
 print('ANSI code page: ' .. acp)
 assert((acp == 65001) == (arg[2] == 'utf8'), 'expected legacy and UTF-8 code page coverage')
 local path = '$encoded'
+assert(os.getenv('LUAJIT_UNICODE_PATH') == path, 'inherited Unicode environment path')
+ffi.cdef[[int MultiByteToWideChar(unsigned int, unsigned long, const char *, int, uint16_t *, int);
+int SetEnvironmentVariableW(const uint16_t *, const uint16_t *);]]
+local function wide(s)
+  local n = ffi.C.MultiByteToWideChar(65001, 8, s, -1, nil, 0)
+  assert(n > 0)
+  local out = ffi.new('uint16_t[?]', n)
+  assert(ffi.C.MultiByteToWideChar(65001, 8, s, -1, out, n) == n)
+  return out
+end
+local name = 'LUAJIT_ENV_' .. path:match('/([^/]+)/unicode_fixture.dll$')
+assert(ffi.C.SetEnvironmentVariableW(wide(name), wide(path)) ~= 0)
+assert(os.getenv(name) == path, 'Unicode environment name and value')
+assert(ffi.C.SetEnvironmentVariableW(wide(name), wide('')) ~= 0)
+assert(os.getenv(name) == '', 'empty differs from absent')
+assert(ffi.C.SetEnvironmentVariableW(wide(name), nil) ~= 0)
+assert(os.getenv(name) == nil)
+name = string.rep('LONG_NAME', 30)
+local long = string.rep(path, 30)
+assert(ffi.C.SetEnvironmentVariableW(wide(name), wide(long)) ~= 0)
+assert(os.getenv(name) == long, 'long environment name and value')
+assert(not pcall(os.getenv, string.char(255)), 'invalid UTF-8 name is rejected')
 if arg[1] == 'relocated' then
   assert(package.cpath:gsub(string.char(92), '/'):find(path:match('^(.*)/'), 1, true))
   assert(require('unicode_fixture') == 42)
@@ -86,5 +110,6 @@ print('PASS Unicode native library and adjacent dependency')
     Push-Location "$work/unrelated"
     try { Checked { & "$work/bin/luajit.exe" "$work/test.lua" } } finally { Pop-Location }
 } finally {
+    $env:LUAJIT_UNICODE_PATH = $previousPath
     Remove-Item -Recurse -Force $work
 }
