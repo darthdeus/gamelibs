@@ -1,0 +1,107 @@
+diff --git a/src/lib_package.c b/src/lib_package.c
+index daaa4104..2ac1fb3d 100644
+--- a/src/lib_package.c
++++ b/src/lib_package.c
+@@ -76,35 +76,62 @@ static const char *ll_bcsym(void *lib, const char *sym)
+ BOOL WINAPI GetModuleHandleExA(DWORD, LPCSTR, HMODULE*);
+ #endif
+ 
++/* Runtime paths are UTF-8, independent of the process ANSI code page. */
++void *lj_win_loadlib(const char *path)
++{
++  int count = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, path, -1, NULL, 0);
++  wchar_t *wide;
++  HMODULE lib;
++  DWORD err;
++  if (!count) return NULL;
++  wide = (wchar_t *)malloc((size_t)count * sizeof(wchar_t));
++  if (!wide) { SetLastError(ERROR_NOT_ENOUGH_MEMORY); return NULL; }
++  if (!MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, path, -1, wide, count)) {
++    err = GetLastError();
++    free(wide);
++    SetLastError(err);
++    return NULL;
++  }
+ #if LJ_TARGET_UWP
+-void *LJ_WIN_LOADLIBA(const char *path)
+-{
+-  DWORD err = GetLastError();
+-  wchar_t wpath[256];
+-  HANDLE lib = NULL;
+-  if (MultiByteToWideChar(CP_ACP, 0, path, -1, wpath, 256) > 0) {
+-    lib = LoadPackagedLibrary(wpath, 0);
++  lib = LoadPackagedLibrary(wide, 0);
++#else
++  {
++    DWORD flags = LOAD_LIBRARY_SEARCH_DEFAULT_DIRS;
++    /* An absolute library path also owns its adjacent dependencies. */
++    if ((count > 3 && wide[1] == L':' && (wide[2] == L'\\' || wide[2] == L'/')) ||
++        (count > 2 && wide[0] == L'\\' && wide[1] == L'\\'))
++      flags |= LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR;
++    lib = LoadLibraryExW(wide, NULL, flags);
+   }
++#endif
++  err = GetLastError();
++  free(wide);
+   SetLastError(err);
+   return lib;
+ }
+-#endif
+ 
+ #undef setprogdir
+ 
+ static void setprogdir(lua_State *L)
+ {
+-  char buff[MAX_PATH + 1];
+-  char *lb;
+-  DWORD nsize = sizeof(buff);
+-  DWORD n = GetModuleFileNameA(NULL, buff, nsize);
+-  if (n == 0 || n == nsize || (lb = strrchr(buff, '\\')) == NULL) {
+-    luaL_error(L, "unable to get ModuleFileName");
+-  } else {
+-    *lb = '\0';
+-    luaL_gsub(L, lua_tostring(L, -1), LUA_EXECDIR, buff);
+-    lua_remove(L, -2);  /* remove original string */
+-  }
++  /* Windows paths and Lua strings have different native encodings. */
++  wchar_t *wide = (wchar_t *)lua_newuserdata(L, 32768 * sizeof(wchar_t));
++  DWORD count = GetModuleFileNameW(NULL, wide, 32768);
++  wchar_t *last;
++  char *utf8;
++  int bytes;
++  if (!count || count == 32768 || (last = wcsrchr(wide, L'\\')) == NULL)
++    luaL_error(L, "unable to get Unicode ModuleFileName");
++  *last = 0;
++  bytes = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, wide, -1, NULL, 0, NULL, NULL);
++  if (!bytes) luaL_error(L, "executable path is not valid Unicode");
++  utf8 = (char *)lua_newuserdata(L, bytes);
++  if (!WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, wide, -1, utf8, bytes, NULL, NULL))
++    luaL_error(L, "unable to encode executable path as UTF-8");
++  luaL_gsub(L, lua_tostring(L, -3), LUA_EXECDIR, utf8);
++  lua_remove(L, -2);
++  lua_remove(L, -2);
++  lua_remove(L, -2);
+ }
+ 
+ static void pusherror(lua_State *L)
+diff --git a/src/lj_arch.h b/src/lj_arch.h
+index 7b7907ef..59452b4a 100644
+--- a/src/lj_arch.h
++++ b/src/lj_arch.h
+@@ -699,14 +699,14 @@
+ #endif
+ 
+ #if LJ_TARGET_WINDOWS
++extern void *lj_win_loadlib(const char *path);
++#define LJ_WIN_LOADLIBA(path) lj_win_loadlib(path)
+ #if LJ_TARGET_UWP
+ #define LJ_WIN_VALLOC	VirtualAllocFromApp
+ #define LJ_WIN_VPROTECT	VirtualProtectFromApp
+-extern void *LJ_WIN_LOADLIBA(const char *path);
+ #else
+ #define LJ_WIN_VALLOC	VirtualAlloc
+ #define LJ_WIN_VPROTECT	VirtualProtect
+-#define LJ_WIN_LOADLIBA(path)	LoadLibraryExA((path), NULL, 0)
+ #endif
+ #endif
+ 
