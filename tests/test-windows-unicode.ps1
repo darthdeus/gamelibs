@@ -33,7 +33,7 @@ __declspec(dllexport) int luaopen_unicode_fixture(lua_State *L) {
 </assembly>
 '@ | Set-Content -Encoding ascii "$work/utf8.manifest"
     Copy-Item "$work/bin/luajit.exe" "$work/bin/luajit-utf8.exe"
-    Checked { mt.exe -nologo "-manifest:$work/utf8.manifest" "-outputresource:$work/bin/luajit-utf8.exe;#1" }
+    Checked { mt.exe -nologo -manifest "$work/utf8.manifest" "-outputresource:$work/bin/luajit-utf8.exe;#1" }
     # Each directory is outside the executable directory and the current directory.
     $names = @('space folder', ('accent-' + [char]0xc1), ('cjk-' + [char]0x6f22),
                ('cyrillic-' + [char]0x416), ('emoji-' + [char]::ConvertFromUtf32(0x1f680)))
