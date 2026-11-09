@@ -46,10 +46,13 @@ __declspec(dllexport) int luaopen_unicode_fixture(lua_State *L) {
         @"
 local ffi = require('ffi')
 ffi.cdef[[int fixture_value(void); unsigned int GetACP(void);]]
-print('ANSI code page: ' .. tonumber(ffi.C.GetACP()))
+local acp = tonumber(ffi.C.GetACP())
+print('ANSI code page: ' .. acp)
+assert((acp == 65001) == (arg[2] == 'utf8'), 'expected legacy and UTF-8 code page coverage')
 local path = '$encoded'
 if arg[1] == 'relocated' then
   assert(package.cpath:gsub(string.char(92), '/'):find(path:match('^(.*)/'), 1, true))
+  assert(require('unicode_fixture') == 42)
 end
 local lib = ffi.load(path)
 assert(lib.fixture_value() == 42)
@@ -66,7 +69,7 @@ print('PASS Unicode native library and adjacent dependency')
         Push-Location "$work/unrelated"
         try {
             foreach ($exe in @('luajit.exe','luajit-utf8.exe')) {
-                Checked { & "$work/bin/$exe" "$work/test.lua" }
+                Checked { & "$work/bin/$exe" "$work/test.lua" direct $(if ($exe -eq 'luajit-utf8.exe') { 'utf8' } else { 'legacy' }) }
             }
         } finally { Pop-Location }
         Copy-Item "$work/bin/luajit.exe", "$work/bin/lua51.dll" $directory
