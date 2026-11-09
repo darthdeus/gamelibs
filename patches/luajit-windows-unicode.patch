@@ -1,8 +1,8 @@
 diff --git a/src/lib_package.c b/src/lib_package.c
-index daaa4104..15f722c0 100644
+index daaa4104..ba513a89 100644
 --- a/src/lib_package.c
 +++ b/src/lib_package.c
-@@ -70,41 +70,76 @@ static const char *ll_bcsym(void *lib, const char *sym)
+@@ -70,41 +70,86 @@ static const char *ll_bcsym(void *lib, const char *sym)
  #define WIN32_LEAN_AND_MEAN
  #include <windows.h>
  
@@ -20,16 +20,10 @@ index daaa4104..15f722c0 100644
 -#if LJ_TARGET_UWP
 -void *LJ_WIN_LOADLIBA(const char *path)
 +/* Runtime paths are UTF-8, independent of the process ANSI code page. */
-+void *lj_win_loadlib(const char *path)
- {
--  DWORD err = GetLastError();
--  wchar_t wpath[256];
--  HANDLE lib = NULL;
--  if (MultiByteToWideChar(CP_ACP, 0, path, -1, wpath, 256) > 0) {
--    lib = LoadPackagedLibrary(wpath, 0);
++static wchar_t *win_utf8path(const char *path)
++{
 +  int count = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, path, -1, NULL, 0);
 +  wchar_t *wide;
-+  HMODULE lib;
 +  DWORD err;
 +  int i;
 +  if (!count) return NULL;
@@ -40,20 +34,36 @@ index daaa4104..15f722c0 100644
 +    free(wide);
 +    SetLastError(err);
 +    return NULL;
-   }
++  }
 +  /* The Windows loader requires backslashes, including for dependency search. */
 +  for (i = 0; i < count; i++) if (wide[i] == L'/') wide[i] = L'\\';
++  return wide;
++}
++
++void *lj_win_loadlib(const char *path)
+ {
+-  DWORD err = GetLastError();
+-  wchar_t wpath[256];
+-  HANDLE lib = NULL;
+-  if (MultiByteToWideChar(CP_ACP, 0, path, -1, wpath, 256) > 0) {
+-    lib = LoadPackagedLibrary(wpath, 0);
++  wchar_t *wide = win_utf8path(path);
++  HMODULE lib;
++  DWORD err;
++  size_t count;
++  if (!wide) return NULL;
++  count = wcslen(wide);
 +#if LJ_TARGET_UWP
 +  lib = LoadPackagedLibrary(wide, 0);
 +#else
 +  {
 +    DWORD flags = LOAD_LIBRARY_SEARCH_DEFAULT_DIRS;
 +    /* An absolute library path also owns its adjacent dependencies. */
-+    if ((count > 3 && wide[1] == L':' && (wide[2] == L'\\' || wide[2] == L'/')) ||
-+        (count > 2 && wide[0] == L'\\' && wide[1] == L'\\'))
++    if ((count >= 3 && wide[1] == L':' && (wide[2] == L'\\' || wide[2] == L'/')) ||
++        (count >= 2 && wide[0] == L'\\' && wide[1] == L'\\'))
 +      flags |= LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR;
 +    lib = LoadLibraryExW(wide, NULL, flags);
-+  }
+   }
 +#endif
 +  err = GetLastError();
 +  free(wide);
@@ -98,6 +108,22 @@ index daaa4104..15f722c0 100644
  }
  
  static void pusherror(lua_State *L)
+@@ -296,7 +341,15 @@ static int lj_cf_package_unloadlib(lua_State *L)
+ 
+ static int readable(const char *filename)
+ {
++#if LJ_TARGET_WINDOWS
++  wchar_t *wide = win_utf8path(filename);
++  FILE *f;
++  if (!wide) return 0;
++  f = _wfopen(wide, L"r");
++  free(wide);
++#else
+   FILE *f = fopen(filename, "r");  /* try to open file */
++#endif
+   if (f == NULL) return 0;  /* open failed */
+   fclose(f);
+   return 1;
 diff --git a/src/lj_arch.h b/src/lj_arch.h
 index 7b7907ef..59452b4a 100644
 --- a/src/lj_arch.h
