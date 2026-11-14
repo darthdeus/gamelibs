@@ -1,0 +1,24 @@
+--- a/src/lj_trace.c
++++ b/src/lj_trace.c
+@@ -696,6 +696,21 @@
+     }
+   }
+ 
++  /* After tryside failed attempts a side trace is replaced by a link to the
++  ** interpreter. That stub inherits the parent's exit state and can fail to
++  ** assemble for the same reason. Give up on the exit then, instead of
++  ** retrying on every taken exit until its counter saturates.
++  */
++  if (J->parent != 0 && J->parent < J->sizetrace) {
++    GCtrace *T = traceref(J, J->parent);
++    if (T != NULL && J->exitno < T->nsnap) {
++      SnapShot *snap = &T->snap[J->exitno];
++      if (snap->count != SNAPCOUNT_DONE &&
++	  snap->count >= J->param[JIT_P_hotexit] + J->param[JIT_P_tryside])
++	snap->count = SNAPCOUNT_DONE;
++    }
++  }
++
+   /* Is there anything to abort? */
+   traceno = J->cur.traceno;
+   if (traceno) {

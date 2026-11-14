@@ -26,13 +26,22 @@ int main(int argc, char **argv)
   assert(n==3 && out.canary==12345);
   for(i=0;i<3;i++) {
     luaJIT_HealthCoal *c=&out.ring[i];
-    assert(c->sequence==h.ring_next-64+i && c->occurrences>1);
+    assert(c->sequence==h.ring_next-64+i && c->occurrences>=1);
     assert(c->parent_uid>0 && c->parent>0 && c->subreason>=1 && c->subreason<=4);
     assert(c->snapshot_entries>=40 && c->slot_count+c->slots_truncated==c->snapshot_entries);
     assert(c->inherited>0 && c->failed_slot<c->snapshot_slots);
     if(c->subreason==1) assert(c->allow_fpr==0);
     assert(c->slots[c->slot_count-1].child_ref!=UINT32_MAX);
     { unsigned j; for(j=0;j<c->slot_count;j++) assert((c->slots[j].flags & 0xff000000u)==0); }
+  }
+  {
+    /* An exit is given up once its interpreter-link stub fails: tryside (4)
+     * side trace attempts share one signature, the stub adds one more. */
+    static luaJIT_HealthCoal all[LUAJIT_HEALTH_RING]; int k, repeated=0;
+    n=luaJIT_health_coalescing(L,1,0,all,sizeof(all[0]),LUAJIT_HEALTH_RING);
+    assert(n==LUAJIT_HEALTH_RING);
+    for(k=0;k<n;k++) { assert(all[k].occurrences<=4); repeated+=all[k].occurrences>1; }
+    assert(repeated>0);
   }
   assert(luaJIT_health_coalescing(L,1,h.ring_next-1,out.ring,sizeof(out.ring[0]),1)==1);
   assert(h.emitted_mcode_bytes==count(L,"bytes"));

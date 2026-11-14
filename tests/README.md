@@ -9,8 +9,11 @@ make -C luajit install PREFIX="$PWD/prebuilt/linux/x86_64"
 
 The public contract is `luajit-health.h`, installed beside `luajit.h`.
 The source remains pinned to upstream c5a2fa4df71eb5ee9c71bc7b32bb5630d18568d7.
-`patches/luajit-health.patch` carries the gamelibs changes. Local and CI LuaJIT
-builds apply it; CI keys include the patch, header and applicator. This does
+`patches/luajit-health.patch` carries the health interface;
+`patches/luajit-side-exit-giveup.patch` stops retrying a side exit once its
+interpreter-link stub fails to assemble (stock LuaJIT retries it on every taken
+exit until the 8-bit exit counter saturates). Local and CI LuaJIT
+builds apply both; CI keys include the patches, header and applicator. This does
 not publish a release. Rock's v0.6.11 binary does not have the capability.
 
 All reads require the owning VM thread. Snapshot and ring reads allocate
@@ -43,4 +46,5 @@ success, aborts, flush/reuse, independent VMs and new VM lifetimes. A generated
 caller preserves forty floating values across a hot guard, exercises real
 coalescing failures, repeat aggregation, ring overflow and bounded reads, and
 reconciles native starts/compiles/aborts/emitted bytes/live population against
-LuaJIT's existing callbacks and introspection. It changes no JIT policy.
+LuaJIT's existing callbacks and introspection. The same caller checks that a
+failing exit is attempted at most `tryside` times plus the stub.
