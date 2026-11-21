@@ -12,8 +12,11 @@ The source remains pinned to upstream c5a2fa4df71eb5ee9c71bc7b32bb5630d18568d7.
 `patches/luajit-health.patch` carries the health interface;
 `patches/luajit-side-exit-giveup.patch` stops retrying a side exit once its
 interpreter-link stub fails to assemble (stock LuaJIT retries it on every taken
-exit until the 8-bit exit counter saturates). Local and CI LuaJIT
-builds apply both; CI keys include the patches, header and applicator. This does
+exit until the 8-bit exit counter saturates);
+`patches/luajit-irt-size-guard.patch` sizes FFI stack arguments from the IR
+type without its guard bit (stock LuaJIT indexes past `lj_ir_type_size` for a
+guarded value, so macOS arm64 stores the ninth and later integer arguments at
+a garbage offset or width). Local and CI LuaJIT builds apply all three; CI keys include the patches, header and applicator. This does
 not publish a release. Rock's v0.6.11 binary does not have the capability.
 
 All reads require the owning VM thread. Snapshot and ring reads allocate

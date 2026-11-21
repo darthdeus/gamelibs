@@ -21,7 +21,8 @@ actual_commit=$(git -C "$LUAJIT_DIR" rev-parse --verify HEAD 2>/dev/null) || die
 [[ "$actual_commit" == "$EXPECTED_COMMIT" ]] || die "expected LuaJIT $EXPECTED_COMMIT, found $actual_commit"
 
 for patch_file in "$PATCH_FILE" "$ROOT_DIR/patches/luajit-windows-unicode.patch" \
-    "$ROOT_DIR/patches/luajit-side-exit-giveup.patch"; do
+    "$ROOT_DIR/patches/luajit-side-exit-giveup.patch" \
+    "$ROOT_DIR/patches/luajit-irt-size-guard.patch"; do
   [[ -f "$patch_file" ]] || die "required patch is missing: $patch_file"
   if git -C "$LUAJIT_DIR" apply --reverse --check "$patch_file" >/dev/null 2>&1; then
     printf 'Already applied: %s\n' "$patch_file"
