@@ -282,6 +282,9 @@ jobs:
         fi
         ls -la prebuilt/linux/x86_64/lib/libluajit* || true
 
+    - name: Test LuaJIT wide float loops
+      run: prebuilt/linux/x86_64/bin/luajit tests/luajit-arm64-loop-entry.lua
+
     - name: Test LuaJIT native health ABI
       run: ./tests/test-luajit-health.sh "$PWD/prebuilt/linux/x86_64"
 
@@ -855,6 +858,9 @@ jobs:
           echo "✓ LuaJIT built from source"
         fi
         ls -la prebuilt/macos/arm64/lib/libluajit* || true
+
+    - name: Test LuaJIT wide float loops
+      run: prebuilt/macos/arm64/bin/luajit tests/luajit-arm64-loop-entry.lua
 
     - name: Create library info file
       run: |

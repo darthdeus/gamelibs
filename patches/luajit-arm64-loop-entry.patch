@@ -1,0 +1,13 @@
+--- a/src/lj_asm.c
++++ b/src/lj_asm.c
+@@ -1697,6 +1697,10 @@
+   if (!neverfuse(as)) as->fuseref = 0;
+   asm_phi_shuffle(as);
+   mcspill = as->mcp;
++#if LJ_TARGET_ARM64
++  /* Do not pair spills across the entry that skips the PHI copies. */
++  as->mcloop = mcspill;
++#endif
+   asm_phi_copyspill(as);
+   asm_loop_fixup(as);
+   as->mcloop = as->mcp;
